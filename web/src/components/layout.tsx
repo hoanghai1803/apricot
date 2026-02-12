@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
-import { BookOpen, Home, Settings, Menu, X } from 'lucide-react'
+import { BookOpen, Home, Settings, Menu, X, Sun, Moon, Monitor } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { type Theme, getStoredTheme, setStoredTheme, applyTheme } from '@/lib/theme'
 
 const navItems = [
   { to: '/', label: 'Home', icon: Home },
@@ -11,15 +12,37 @@ const navItems = [
   { to: '/preferences', label: 'Preferences', icon: Settings },
 ] as const
 
+const themeOptions: { value: Theme; icon: typeof Sun; label: string }[] = [
+  { value: 'light', icon: Sun, label: 'Light' },
+  { value: 'dark', icon: Moon, label: 'Dark' },
+  { value: 'system', icon: Monitor, label: 'System' },
+]
+
 export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [theme, setTheme] = useState<Theme>(getStoredTheme)
+
+  const cycleTheme = useCallback(() => {
+    const order: Theme[] = ['light', 'dark', 'system']
+    const next = order[(order.indexOf(theme) + 1) % order.length]
+    setTheme(next)
+    setStoredTheme(next)
+    applyTheme(next)
+  }, [theme])
+
+  useEffect(() => {
+    applyTheme(theme)
+  }, [theme])
+
+  const currentThemeOption = themeOptions.find((t) => t.value === theme)!
+  const ThemeIcon = currentThemeOption.icon
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="mx-auto flex h-14 max-w-6xl items-center px-4 sm:px-6">
           <NavLink to="/" className="mr-8 flex items-center gap-2">
-            <span className="text-lg font-bold tracking-tight">Apricot</span>
+            <span className="text-lg font-bold tracking-tight text-primary">Apricot</span>
           </NavLink>
 
           <nav className="hidden items-center gap-1 md:flex">
@@ -32,8 +55,8 @@ export function Layout() {
                   cn(
                     'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                     isActive
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                   )
                 }
               >
@@ -43,15 +66,27 @@ export function Layout() {
             ))}
           </nav>
 
-          <div className="ml-auto md:hidden">
+          <div className="ml-auto flex items-center gap-1">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setMobileOpen(!mobileOpen)}
-              aria-label="Toggle navigation"
+              onClick={cycleTheme}
+              aria-label={`Theme: ${currentThemeOption.label}. Click to change.`}
+              title={`Theme: ${currentThemeOption.label}`}
             >
-              {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+              <ThemeIcon className="size-4" />
             </Button>
+
+            <div className="md:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setMobileOpen(!mobileOpen)}
+                aria-label="Toggle navigation"
+              >
+                {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -68,8 +103,8 @@ export function Layout() {
                     cn(
                       'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                       isActive
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                     )
                   }
                 >

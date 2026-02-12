@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Save, Loader2, AlertCircle, Check, Info } from 'lucide-react'
+import { Save, Loader2, AlertCircle, Info } from 'lucide-react'
 import type { BlogSource, Preferences as PreferencesType } from '@/lib/types'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
+import { Toast } from '@/components/toast'
 
 type FeedMode = 'recent_posts' | 'time_range'
 
@@ -86,7 +87,6 @@ export function Preferences() {
         lookback_days: lookbackDays,
       })
       setSuccess(true)
-      setTimeout(() => setSuccess(false), 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save preferences')
     } finally {
@@ -126,13 +126,6 @@ export function Preferences() {
         <div className="flex items-start gap-3 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm">
           <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
           <p>{error}</p>
-        </div>
-      )}
-
-      {success && (
-        <div className="flex items-center gap-3 rounded-lg border border-green-500/50 bg-green-500/10 p-4 text-sm">
-          <Check className="size-4 shrink-0 text-green-600 dark:text-green-400" />
-          <p>Preferences saved successfully.</p>
         </div>
       )}
 
@@ -254,12 +247,12 @@ export function Preferences() {
         <div>
           <h2 className="text-lg font-semibold">Blog Sources</h2>
           <p className="text-sm text-muted-foreground">
-            {sources.filter((s) => selectedSources.has(s.id)).length} of {sources.length} sources enabled
+            Choose which engineering blogs to include in discovery.
           </p>
         </div>
 
-        <div className="flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4 text-sm">
-          <Info className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400" />
+        <div className="flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
+          <Info className="mt-0.5 size-4 shrink-0 text-primary" />
           <p className="text-muted-foreground">
             Some blogs may be unreachable depending on your network. If a source
             consistently fails to fetch, consider disabling it.
@@ -267,30 +260,57 @@ export function Preferences() {
         </div>
 
         {sources.length > 0 && (
-          <div className="space-y-3">
-            {sources.map((source) => (
-              <div
-                key={source.id}
-                className="flex items-center justify-between gap-4 rounded-lg border p-4"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-medium">{source.company}</span>
-                    <span className="text-sm text-muted-foreground">{source.name}</span>
-                  </div>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">
-                    {source.feed_url}
-                  </p>
-                </div>
-                <Switch
-                  checked={selectedSources.has(source.id)}
-                  onCheckedChange={(checked: boolean) =>
-                    handleSourceToggle(source.id, checked)
-                  }
-                  aria-label={`Toggle ${source.company} - ${source.name}`}
-                />
+          <div className="overflow-hidden rounded-lg border">
+            <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium">All sources</span>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {selectedSources.size} of {sources.length}
+                </span>
               </div>
-            ))}
+              <Switch
+                checked={selectedSources.size === sources.length}
+                onCheckedChange={(checked: boolean) => {
+                  if (checked) {
+                    setSelectedSources(new Set(sources.map((s) => s.id)))
+                  } else {
+                    setSelectedSources(new Set())
+                  }
+                }}
+                aria-label="Toggle all sources"
+                className={
+                  selectedSources.size > 0 && selectedSources.size < sources.length
+                    ? 'data-[state=unchecked]:bg-primary/40'
+                    : ''
+                }
+              />
+            </div>
+
+            <div className="divide-y">
+              {sources.map((source) => (
+                <div
+                  key={source.id}
+                  className="flex items-center justify-between gap-4 px-4 py-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-medium">{source.company}</span>
+                      <span className="text-sm text-muted-foreground">{source.name}</span>
+                    </div>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      {source.feed_url}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={selectedSources.has(source.id)}
+                    onCheckedChange={(checked: boolean) =>
+                      handleSourceToggle(source.id, checked)
+                    }
+                    aria-label={`Toggle ${source.company} - ${source.name}`}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -305,6 +325,12 @@ export function Preferences() {
           {saving ? 'Saving...' : 'Save Preferences'}
         </Button>
       </div>
+
+      <Toast
+        message="Preferences saved successfully."
+        visible={success}
+        onClose={() => setSuccess(false)}
+      />
     </div>
   )
 }

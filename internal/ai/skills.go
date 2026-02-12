@@ -7,7 +7,7 @@ import (
 
 const filterAndRankSystemPrompt = `You are a tech blog curator. Given the user's interests and a list of recent blog posts, select exactly 10 posts that best match the user's interests. Return ONLY valid JSON: an array of objects with "id" (the post ID) and "reason" (one sentence explaining why this post matches). Rank by relevance, most relevant first. If there are fewer than 10 posts, select all of them.`
 
-const summarizeSystemPrompt = `You are a technical writer. Summarize the following blog post in exactly 4-5 sentences. Focus on: the problem being solved, the approach taken, key technical decisions, and the outcome or results. Write for a senior engineer audience. Be specific about technologies and numbers mentioned in the post.`
+const summarizeSystemPrompt = `You are a technical writer. Summarize the following blog post in exactly 4-5 sentences. Focus on: the problem being solved, the approach taken, key technical decisions, and the outcome or results. Write for a senior engineer audience. Be specific about technologies and numbers mentioned in the post. Do NOT include any prefix like "# Summary" or "Summary:" — start directly with the first sentence.`
 
 // FilterAndRankPrompt builds the system and user prompts for the
 // filter-and-rank operation.

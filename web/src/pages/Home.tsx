@@ -61,7 +61,7 @@ export function Home() {
       const data = await api.post<DiscoverResponse>('/api/discover')
       setResults(data.results)
       setFailedFeeds(data.failed_feeds ?? [])
-      setLastDiscoveredAt(data.created_at)
+      setLastDiscoveredAt(new Date().toISOString())
       setHasSearched(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to discover blogs')
@@ -121,7 +121,7 @@ export function Home() {
           {loading ? 'Discovering...' : 'Collect Fancy Blogs'}
         </Button>
 
-        {lastDiscoveredAt && !loading && (
+        {!loading && formatLastDiscovered(lastDiscoveredAt) && (
           <p className="text-xs text-muted-foreground">
             Last discovered: {formatLastDiscovered(lastDiscoveredAt)}
           </p>
@@ -181,7 +181,7 @@ export function Home() {
           >
             <span className="flex items-center gap-2">
               <AlertTriangle className="size-4" />
-              Could not reach {failedFeeds.length} source{failedFeeds.length === 1 ? '' : 's'}
+              Could not reach {failedFeeds.length} source{failedFeeds.length === 1 ? '' : 's'} due to network connection issues
             </span>
             {failedExpanded ? (
               <ChevronUp className="size-4" />
@@ -191,12 +191,9 @@ export function Home() {
           </button>
 
           {failedExpanded && (
-            <ul className="mt-3 space-y-1 text-sm text-yellow-700 dark:text-yellow-400">
+            <ul className="mt-3 space-y-1 pl-6 text-sm text-yellow-700 dark:text-yellow-400 list-disc">
               {failedFeeds.map((feed) => (
-                <li key={feed.source} className="flex items-start gap-2">
-                  <span className="shrink-0 font-medium">{feed.source}:</span>
-                  <span className="text-yellow-600 dark:text-yellow-500">{feed.error}</span>
-                </li>
+                <li key={feed.source}>{feed.source}</li>
               ))}
             </ul>
           )}
