@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Save, Loader2, AlertCircle, Check, Info } from 'lucide-react'
+import { Save, Loader2, AlertCircle, Check } from 'lucide-react'
 import type { BlogSource, Preferences as PreferencesType } from '@/lib/types'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -156,100 +156,102 @@ export function Preferences() {
       <Separator />
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Feed Settings</h2>
-
-        <div className="space-y-3">
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="radio"
-              name="feed_mode"
-              value="recent_posts"
-              checked={feedMode === 'recent_posts'}
-              onChange={() => setFeedMode('recent_posts')}
-              className="mt-1"
-            />
-            <div>
-              <span className="text-sm font-medium">Most Recent Posts</span>
-              <p className="text-xs text-muted-foreground">
-                Fetch the N most recent posts from each blog source.
-              </p>
-            </div>
-          </label>
-
-          {feedMode === 'recent_posts' && (
-            <div className="ml-6 space-y-1">
-              <label htmlFor="max-articles" className="text-sm text-muted-foreground">
-                Posts per source: {maxArticles}
-              </label>
-              <input
-                id="max-articles"
-                type="range"
-                min={5}
-                max={20}
-                value={maxArticles}
-                onChange={(e) => setMaxArticles(Number(e.target.value))}
-                className="w-full max-w-xs"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground" style={{ maxWidth: '20rem' }}>
-                <span>5</span>
-                <span>20</span>
-              </div>
-            </div>
-          )}
-
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="radio"
-              name="feed_mode"
-              value="time_range"
-              checked={feedMode === 'time_range'}
-              onChange={() => setFeedMode('time_range')}
-              className="mt-1"
-            />
-            <div>
-              <span className="text-sm font-medium">Time Range</span>
-              <p className="text-xs text-muted-foreground">
-                Fetch posts published within the last N days.
-              </p>
-            </div>
-          </label>
-
-          {feedMode === 'time_range' && (
-            <div className="ml-6 space-y-1">
-              <label htmlFor="lookback-days" className="text-sm text-muted-foreground">
-                Lookback: {lookbackDays} day{lookbackDays === 1 ? '' : 's'}
-              </label>
-              <input
-                id="lookback-days"
-                type="range"
-                min={1}
-                max={30}
-                value={lookbackDays}
-                onChange={(e) => setLookbackDays(Number(e.target.value))}
-                className="w-full max-w-xs"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground" style={{ maxWidth: '20rem' }}>
-                <span>1 day</span>
-                <span>30 days</span>
-              </div>
-            </div>
-          )}
+        <div>
+          <h2 className="text-lg font-semibold">Feed Settings</h2>
+          <p className="text-sm text-muted-foreground">
+            Choose how to select posts from each blog source.
+          </p>
         </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setFeedMode('recent_posts')}
+            className={`rounded-lg border-2 p-4 text-left transition-colors ${
+              feedMode === 'recent_posts'
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-muted-foreground/30'
+            }`}
+          >
+            <span className="text-sm font-medium">By Post Count</span>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Get the latest posts from each source, regardless of when they were published.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFeedMode('time_range')}
+            className={`rounded-lg border-2 p-4 text-left transition-colors ${
+              feedMode === 'time_range'
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-muted-foreground/30'
+            }`}
+          >
+            <span className="text-sm font-medium">By Time Range</span>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Only get posts published within a specific number of days.
+            </p>
+          </button>
+        </div>
+
+        {feedMode === 'recent_posts' && (
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="flex items-baseline justify-between">
+              <label htmlFor="max-articles" className="text-sm font-medium">
+                Posts per source
+              </label>
+              <span className="text-2xl font-bold tabular-nums">{maxArticles}</span>
+            </div>
+            <input
+              id="max-articles"
+              type="range"
+              min={5}
+              max={20}
+              step={1}
+              value={maxArticles}
+              onChange={(e) => setMaxArticles(Number(e.target.value))}
+              className="mt-2 w-full accent-primary"
+            />
+            <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+              <span>5 posts</span>
+              <span>20 posts</span>
+            </div>
+          </div>
+        )}
+
+        {feedMode === 'time_range' && (
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <div className="flex items-baseline justify-between">
+              <label htmlFor="lookback-days" className="text-sm font-medium">
+                Look back period
+              </label>
+              <span className="text-2xl font-bold tabular-nums">
+                {lookbackDays} {lookbackDays === 1 ? 'day' : 'days'}
+              </span>
+            </div>
+            <input
+              id="lookback-days"
+              type="range"
+              min={1}
+              max={30}
+              step={1}
+              value={lookbackDays}
+              onChange={(e) => setLookbackDays(Number(e.target.value))}
+              className="mt-2 w-full accent-primary"
+            />
+            <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+              <span>1 day</span>
+              <span>30 days</span>
+            </div>
+          </div>
+        )}
       </div>
 
       <Separator />
 
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Blog Sources</h2>
-
-        <div className="flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4 text-sm">
-          <Info className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400" />
-          <p className="text-muted-foreground">
-            Some blogs may be unreachable from your network. Blogs hosted on Medium
-            (Netflix, Airbnb, Pinterest, Lyft) may require a VPN in certain regions. If a
-            source consistently fails to fetch, consider disabling it.
-          </p>
-        </div>
 
         {sources.length === 0 ? (
           <p className="text-sm text-muted-foreground">
