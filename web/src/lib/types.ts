@@ -1,0 +1,50 @@
+export interface BlogSource {
+  id: number
+  name: string
+  company: string
+  feed_url: string
+  site_url: string
+  is_active: boolean
+  created_at: string
+}
+
+export interface Blog {
+  id: number
+  source_id: number
+  source?: string
+  title: string
+  url: string
+  description?: string
+  full_content?: string
+  published_at?: string
+  fetched_at: string
+  content_hash?: string
+  created_at: string
+}
+
+export interface ReadingListItem {
+  id: number
+  blog_id: number
+  blog?: Blog
+  summary?: string
+  status: 'unread' | 'reading' | 'read'
+  notes?: string
+  added_at: string
+  read_at?: string
+}
+
+export interface DiscoverResult {
+  id: number
+  title: string
+  url: string
+  source: string
+  published_at?: string
+  summary: string
+  reason: string
+}
+
+export interface Preferences {
+  topics?: string
+  selected_sources?: number[]
+  [key: string]: unknown
+}
