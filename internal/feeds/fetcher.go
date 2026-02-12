@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	userAgent      = "Apricot/1.0 (https://github.com/hoanghai1803/apricot)"
 	httpTimeout    = 30 * time.Second
 	maxConcurrent  = 10
 	rateLimitDelay = 1 * time.Second
@@ -52,14 +51,18 @@ type userAgentTransport struct {
 
 func (t *userAgentTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req = req.Clone(req.Context())
-	req.Header.Set("User-Agent", userAgent)
+	// Use a browser-like User-Agent to avoid bot detection on some sites.
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	return t.base.RoundTrip(req)
 }
 
 // FetchAll fetches RSS feeds from all sources concurrently with a maximum of
-// 10 goroutines. Individual source failures are logged and skipped rather than
-// failing the entire batch.
-func (f *Fetcher) FetchAll(ctx context.Context, sources []models.BlogSource, lookbackDays int) ([]models.Blog, error) {
+// 10 goroutines. Each feed is limited to maxArticles most recent posts.
+// Individual source failures are logged and skipped rather than failing the
+// entire batch.
+func (f *Fetcher) FetchAll(ctx context.Context, sources []models.BlogSource, maxArticles int) ([]models.Blog, error) {
 	var (
 		results []models.Blog
 		mu      sync.Mutex
@@ -70,7 +73,7 @@ func (f *Fetcher) FetchAll(ctx context.Context, sources []models.BlogSource, loo
 
 	for _, src := range sources {
 		g.Go(func() error {
-			blogs, err := f.fetchSingleFeed(ctx, src, lookbackDays)
+			blogs, err := f.fetchSingleFeed(ctx, src, maxArticles)
 			if err != nil {
 				slog.Warn("failed to fetch feed",
 					"source", src.Name,
@@ -101,20 +104,19 @@ func (f *Fetcher) FetchAll(ctx context.Context, sources []models.BlogSource, loo
 
 // fetchSingleFeed retrieves and parses an RSS feed from a single source. It
 // respects per-domain rate limiting before making the HTTP request.
-func (f *Fetcher) fetchSingleFeed(ctx context.Context, source models.BlogSource, lookbackDays int) ([]models.Blog, error) {
+func (f *Fetcher) fetchSingleFeed(ctx context.Context, source models.BlogSource, maxArticles int) ([]models.Blog, error) {
 	domain := extractDomain(source.FeedURL)
 	f.waitForRateLimit(domain)
 
 	fp := gofeed.NewParser()
 	fp.Client = f.client
-	fp.UserAgent = userAgent
 
 	feed, err := fp.ParseURLWithContext(source.FeedURL, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("parsing feed %q: %w", source.FeedURL, err)
 	}
 
-	blogs := parseFeedItems(source, feed, lookbackDays)
+	blogs := parseFeedItems(source, feed, maxArticles)
 	return blogs, nil
 }
 

@@ -13,21 +13,20 @@ import (
 
 var htmlTagPattern = regexp.MustCompile("<[^>]*>")
 
-// parseFeedItems converts gofeed items into Blog models, filtering by the
-// lookback window. Items with nil PublishedParsed are always included. Items
-// with empty Title or URL are skipped.
-func parseFeedItems(source models.BlogSource, feed *gofeed.Feed, lookbackDays int) []models.Blog {
-	cutoff := time.Now().AddDate(0, 0, -lookbackDays)
+// parseFeedItems converts gofeed items into Blog models, taking the most
+// recent maxArticles posts. Items with empty Title or URL are skipped.
+// RSS feeds typically return items in reverse chronological order (newest
+// first), so we simply take the first maxArticles valid items.
+func parseFeedItems(source models.BlogSource, feed *gofeed.Feed, maxArticles int) []models.Blog {
 	now := time.Now()
 
 	var blogs []models.Blog
 	for _, item := range feed.Items {
-		if item.Title == "" || item.Link == "" {
-			continue
+		if len(blogs) >= maxArticles {
+			break
 		}
 
-		// Filter by publication date when available.
-		if item.PublishedParsed != nil && item.PublishedParsed.Before(cutoff) {
+		if item.Title == "" || item.Link == "" {
 			continue
 		}
 

@@ -66,7 +66,7 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 
 		// 4. Fetch feeds.
 		slog.Info("fetching feeds", "sources", len(sources))
-		blogs, err := fetcher.FetchAll(ctx, sources, cfg.Feeds.LookbackDays)
+		blogs, err := fetcher.FetchAll(ctx, sources, cfg.Feeds.MaxArticlesPerFeed)
 		if err != nil {
 			slog.Error("failed to fetch feeds", "error", err)
 			writeError(w, http.StatusInternalServerError, "Failed to fetch feeds")

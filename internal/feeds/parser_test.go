@@ -11,7 +11,6 @@ import (
 func TestParseFeedItems(t *testing.T) {
 	now := time.Now()
 	recentTime := now.Add(-12 * time.Hour)
-	oldTime := now.Add(-60 * 24 * time.Hour) // 60 days ago
 
 	source := models.BlogSource{
 		ID:   42,
@@ -19,75 +18,77 @@ func TestParseFeedItems(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		items        []*gofeed.Item
-		lookbackDays int
-		wantCount    int
-		desc         string
+		name        string
+		items       []*gofeed.Item
+		maxArticles int
+		wantCount   int
+		desc        string
 	}{
 		{
-			name: "recent item within lookback window",
+			name: "takes up to maxArticles items",
 			items: []*gofeed.Item{
-				{Title: "Recent Post", Link: "https://example.com/recent", Description: "A recent post", PublishedParsed: &recentTime},
+				{Title: "Post 1", Link: "https://example.com/1", PublishedParsed: &recentTime},
+				{Title: "Post 2", Link: "https://example.com/2", PublishedParsed: &recentTime},
+				{Title: "Post 3", Link: "https://example.com/3", PublishedParsed: &recentTime},
 			},
-			lookbackDays: 7,
-			wantCount:    1,
-			desc:         "items within the lookback window should be included",
+			maxArticles: 2,
+			wantCount:   2,
+			desc:        "should limit to maxArticles items",
 		},
 		{
-			name: "old item filtered by lookback",
+			name: "returns all when fewer than maxArticles",
 			items: []*gofeed.Item{
-				{Title: "Old Post", Link: "https://example.com/old", Description: "An old post", PublishedParsed: &oldTime},
+				{Title: "Post 1", Link: "https://example.com/1", PublishedParsed: &recentTime},
 			},
-			lookbackDays: 30,
-			wantCount:    0,
-			desc:         "items older than lookback window should be excluded",
+			maxArticles: 10,
+			wantCount:   1,
+			desc:        "should return all items when fewer than limit",
 		},
 		{
 			name: "nil published date is included",
 			items: []*gofeed.Item{
 				{Title: "No Date Post", Link: "https://example.com/nodate", Description: "No date"},
 			},
-			lookbackDays: 7,
-			wantCount:    1,
-			desc:         "items with nil PublishedParsed should always be included",
+			maxArticles: 10,
+			wantCount:   1,
+			desc:        "items with nil PublishedParsed should be included",
 		},
 		{
 			name: "empty title is skipped",
 			items: []*gofeed.Item{
 				{Title: "", Link: "https://example.com/notitle", PublishedParsed: &recentTime},
 			},
-			lookbackDays: 7,
-			wantCount:    0,
-			desc:         "items with empty title should be skipped",
+			maxArticles: 10,
+			wantCount:   0,
+			desc:        "items with empty title should be skipped",
 		},
 		{
 			name: "empty URL is skipped",
 			items: []*gofeed.Item{
 				{Title: "No URL Post", Link: "", PublishedParsed: &recentTime},
 			},
-			lookbackDays: 7,
-			wantCount:    0,
-			desc:         "items with empty URL should be skipped",
+			maxArticles: 10,
+			wantCount:   0,
+			desc:        "items with empty URL should be skipped",
 		},
 		{
-			name: "mixed items with some valid some invalid",
+			name: "skips invalid items and still respects limit",
 			items: []*gofeed.Item{
-				{Title: "Good Post", Link: "https://example.com/good", PublishedParsed: &recentTime},
-				{Title: "", Link: "https://example.com/notitle", PublishedParsed: &recentTime},
-				{Title: "Old Post", Link: "https://example.com/old", PublishedParsed: &oldTime},
-				{Title: "No Date", Link: "https://example.com/nodate"},
+				{Title: "", Link: "https://example.com/notitle"},         // skipped
+				{Title: "Good 1", Link: "https://example.com/good1"},     // counted
+				{Title: "Good 2", Link: "https://example.com/good2"},     // counted
+				{Title: "Good 3", Link: "https://example.com/good3"},     // not reached (limit=2)
 			},
-			lookbackDays: 7,
-			wantCount:    2, // Good Post + No Date
-			desc:         "mix of valid and invalid items should filter correctly",
+			maxArticles: 2,
+			wantCount:   2,
+			desc:        "invalid items don't count toward the limit",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			feed := &gofeed.Feed{Items: tt.items}
-			blogs := parseFeedItems(source, feed, tt.lookbackDays)
+			blogs := parseFeedItems(source, feed, tt.maxArticles)
 
 			if got := len(blogs); got != tt.wantCount {
 				t.Errorf("%s: got %d blogs, want %d", tt.desc, got, tt.wantCount)
@@ -97,7 +98,7 @@ func TestParseFeedItems(t *testing.T) {
 }
 
 func TestParseFeedItems_FieldMapping(t *testing.T) {
-	pubTime := time.Now().Add(-24 * time.Hour) // yesterday
+	pubTime := time.Now().Add(-24 * time.Hour)
 	source := models.BlogSource{
 		ID:   7,
 		Name: "Engineering Blog",
@@ -114,7 +115,7 @@ func TestParseFeedItems_FieldMapping(t *testing.T) {
 		},
 	}
 
-	blogs := parseFeedItems(source, feed, 365)
+	blogs := parseFeedItems(source, feed, 10)
 	if len(blogs) != 1 {
 		t.Fatalf("expected 1 blog, got %d", len(blogs))
 	}
@@ -173,7 +174,6 @@ func TestComputeHash(t *testing.T) {
 		})
 	}
 
-	// Different inputs produce different hashes.
 	if computeHash("a") == computeHash("b") {
 		t.Error("different inputs should produce different hashes")
 	}
