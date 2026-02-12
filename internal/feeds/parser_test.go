@@ -88,7 +88,8 @@ func TestParseFeedItems(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			feed := &gofeed.Feed{Items: tt.items}
-			blogs := parseFeedItems(source, feed, tt.maxArticles)
+			opts := FetchOptions{Mode: "recent_posts", MaxArticles: tt.maxArticles}
+			blogs := parseFeedItems(source, feed, opts)
 
 			if got := len(blogs); got != tt.wantCount {
 				t.Errorf("%s: got %d blogs, want %d", tt.desc, got, tt.wantCount)
@@ -115,7 +116,8 @@ func TestParseFeedItems_FieldMapping(t *testing.T) {
 		},
 	}
 
-	blogs := parseFeedItems(source, feed, 10)
+	opts := FetchOptions{Mode: "recent_posts", MaxArticles: 10}
+	blogs := parseFeedItems(source, feed, opts)
 	if len(blogs) != 1 {
 		t.Fatalf("expected 1 blog, got %d", len(blogs))
 	}
@@ -148,6 +150,65 @@ func TestParseFeedItems_FieldMapping(t *testing.T) {
 	}
 	if blog.ContentHash == "" {
 		t.Error("ContentHash should not be empty")
+	}
+}
+
+func TestParseFeedItems_TimeRangeMode(t *testing.T) {
+	now := time.Now()
+	recent := now.Add(-2 * 24 * time.Hour) // 2 days ago
+	old := now.Add(-10 * 24 * time.Hour)   // 10 days ago
+
+	source := models.BlogSource{
+		ID:   1,
+		Name: "Test Blog",
+	}
+
+	feed := &gofeed.Feed{
+		Items: []*gofeed.Item{
+			{Title: "Recent Post", Link: "https://example.com/recent", PublishedParsed: &recent},
+			{Title: "Old Post", Link: "https://example.com/old", PublishedParsed: &old},
+			{Title: "No Date Post", Link: "https://example.com/nodate"},
+		},
+	}
+
+	opts := FetchOptions{Mode: "time_range", LookbackDays: 7}
+	blogs := parseFeedItems(source, feed, opts)
+
+	// Should include the recent post and the no-date post, but not the old post.
+	if len(blogs) != 2 {
+		t.Fatalf("expected 2 blogs, got %d", len(blogs))
+	}
+	if blogs[0].Title != "Recent Post" {
+		t.Errorf("blogs[0].Title = %q, want %q", blogs[0].Title, "Recent Post")
+	}
+	if blogs[1].Title != "No Date Post" {
+		t.Errorf("blogs[1].Title = %q, want %q", blogs[1].Title, "No Date Post")
+	}
+}
+
+func TestParseFeedItems_DefaultsToRecentPosts(t *testing.T) {
+	now := time.Now()
+	recent := now.Add(-1 * time.Hour)
+
+	source := models.BlogSource{
+		ID:   1,
+		Name: "Test Blog",
+	}
+
+	feed := &gofeed.Feed{
+		Items: []*gofeed.Item{
+			{Title: "Post 1", Link: "https://example.com/1", PublishedParsed: &recent},
+			{Title: "Post 2", Link: "https://example.com/2", PublishedParsed: &recent},
+			{Title: "Post 3", Link: "https://example.com/3", PublishedParsed: &recent},
+		},
+	}
+
+	// Empty Mode should default to recent_posts behavior.
+	opts := FetchOptions{MaxArticles: 2}
+	blogs := parseFeedItems(source, feed, opts)
+
+	if len(blogs) != 2 {
+		t.Errorf("expected 2 blogs with default mode, got %d", len(blogs))
 	}
 }
 

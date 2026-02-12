@@ -86,6 +86,7 @@ type migration struct {
 var migrations = []migration{
 	{Version: 1, SQL: migrationV1},
 	{Version: 2, SQL: migrationV2},
+	{Version: 3, SQL: migrationV3},
 }
 
 const migrationV1 = `
@@ -281,6 +282,11 @@ DELETE FROM blog_sources WHERE feed_url IN (
     'https://doordash.engineering/feed/',
     'https://blog.x.com/engineering/en_us/blog.rss'
 );
+`
+
+const migrationV3 = `
+ALTER TABLE discovery_sessions ADD COLUMN results_json TEXT;
+ALTER TABLE discovery_sessions ADD COLUMN failed_feeds_json TEXT;
 `
 
 func parseTimePtr(s *string) *time.Time {

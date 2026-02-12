@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/hoanghai1803/apricot/internal/models"
@@ -20,6 +21,8 @@ func TestCreateSession(t *testing.T) {
 		ModelUsed:           "claude-haiku-4-5",
 		InputTokens:         &inputTokens,
 		OutputTokens:        &outputTokens,
+		ResultsJSON:         `[{"id":1,"title":"test"}]`,
+		FailedFeedsJSON:     `[{"source":"Bad Blog","error":"timeout"}]`,
 	}
 
 	id, err := store.CreateSession(ctx, session)
@@ -59,6 +62,12 @@ func TestCreateSession(t *testing.T) {
 	if got.OutputTokens == nil || *got.OutputTokens != 50 {
 		t.Errorf("OutputTokens = %v, want 50", got.OutputTokens)
 	}
+	if got.ResultsJSON != `[{"id":1,"title":"test"}]` {
+		t.Errorf("ResultsJSON = %q, want %q", got.ResultsJSON, `[{"id":1,"title":"test"}]`)
+	}
+	if got.FailedFeedsJSON != `[{"source":"Bad Blog","error":"timeout"}]` {
+		t.Errorf("FailedFeedsJSON = %q, want %q", got.FailedFeedsJSON, `[{"source":"Bad Blog","error":"timeout"}]`)
+	}
 	if got.CreatedAt.IsZero() {
 		t.Error("CreatedAt is zero")
 	}
@@ -96,6 +105,12 @@ func TestCreateSession_NilTokens(t *testing.T) {
 	}
 	if got.OutputTokens != nil {
 		t.Errorf("OutputTokens = %v, want nil", got.OutputTokens)
+	}
+	if got.ResultsJSON != "" {
+		t.Errorf("ResultsJSON = %q, want empty", got.ResultsJSON)
+	}
+	if got.FailedFeedsJSON != "" {
+		t.Errorf("FailedFeedsJSON = %q, want empty", got.FailedFeedsJSON)
 	}
 }
 
@@ -145,5 +160,63 @@ func TestGetRecentSessions_Empty(t *testing.T) {
 	}
 	if len(sessions) != 0 {
 		t.Errorf("got %d sessions, want 0", len(sessions))
+	}
+}
+
+func TestGetLatestSession(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	// No sessions yet.
+	_, err := store.GetLatestSession(ctx)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got: %v", err)
+	}
+
+	// Insert a session.
+	session := &models.DiscoverySession{
+		PreferencesSnapshot: "topics",
+		BlogsConsidered:     10,
+		BlogsSelected:       "[1,2]",
+		ModelUsed:           "test-model",
+		ResultsJSON:         `[{"id":1}]`,
+		FailedFeedsJSON:     `[]`,
+	}
+	id, err := store.CreateSession(ctx, session)
+	if err != nil {
+		t.Fatalf("CreateSession() error: %v", err)
+	}
+
+	// Retrieve it.
+	got, err := store.GetLatestSession(ctx)
+	if err != nil {
+		t.Fatalf("GetLatestSession() error: %v", err)
+	}
+	if got.ID != id {
+		t.Errorf("ID = %d, want %d", got.ID, id)
+	}
+	if got.ResultsJSON != `[{"id":1}]` {
+		t.Errorf("ResultsJSON = %q, want %q", got.ResultsJSON, `[{"id":1}]`)
+	}
+
+	// Insert another and verify we get the newest.
+	session2 := &models.DiscoverySession{
+		PreferencesSnapshot: "topics2",
+		BlogsConsidered:     20,
+		BlogsSelected:       "[3,4]",
+		ModelUsed:           "test-model-2",
+		ResultsJSON:         `[{"id":3}]`,
+	}
+	id2, err := store.CreateSession(ctx, session2)
+	if err != nil {
+		t.Fatalf("CreateSession() error: %v", err)
+	}
+
+	got2, err := store.GetLatestSession(ctx)
+	if err != nil {
+		t.Fatalf("GetLatestSession() error: %v", err)
+	}
+	if got2.ID != id2 {
+		t.Errorf("latest ID = %d, want %d", got2.ID, id2)
 	}
 }

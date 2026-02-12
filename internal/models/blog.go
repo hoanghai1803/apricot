@@ -46,5 +46,7 @@ type DiscoverySession struct {
 	ModelUsed           string    `json:"model_used"`
 	InputTokens         *int      `json:"input_tokens,omitempty"`
 	OutputTokens        *int      `json:"output_tokens,omitempty"`
+	ResultsJSON         string    `json:"results_json,omitempty"`
+	FailedFeedsJSON     string    `json:"failed_feeds_json,omitempty"`
 	CreatedAt           time.Time `json:"created_at"`
 }

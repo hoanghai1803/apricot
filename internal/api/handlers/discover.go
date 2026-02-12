@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -22,6 +23,14 @@ type DiscoverResult struct {
 	PublishedAt *string `json:"published_at,omitempty"`
 	Summary     string  `json:"summary"`
 	Reason      string  `json:"reason"`
+}
+
+// DiscoverResponse is the full response for discovery endpoints.
+type DiscoverResponse struct {
+	Results     []DiscoverResult `json:"results"`
+	FailedFeeds []feeds.FailedFeed `json:"failed_feeds"`
+	SessionID   int64            `json:"session_id"`
+	CreatedAt   string           `json:"created_at"`
 }
 
 // Discover handles POST /api/discover. It orchestrates the full discovery
@@ -51,7 +60,10 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 			return
 		}
 
-		// 3. Get active sources.
+		// 3. Load feed preferences for mode, max articles, and lookback days.
+		fetchOpts := buildFetchOptions(store, cfg, ctx)
+
+		// 4. Get active sources.
 		sources, err := store.GetActiveSources(ctx)
 		if err != nil {
 			slog.Error("failed to get sources", "error", err)
@@ -64,30 +76,37 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 			return
 		}
 
-		// 4. Fetch feeds.
-		slog.Info("fetching feeds", "sources", len(sources))
-		blogs, err := fetcher.FetchAll(ctx, sources, cfg.Feeds.MaxArticlesPerFeed)
+		// 5. Fetch feeds.
+		slog.Info("fetching feeds", "sources", len(sources), "mode", fetchOpts.Mode)
+		fetchResult, err := fetcher.FetchAll(ctx, sources, fetchOpts)
 		if err != nil {
 			slog.Error("failed to fetch feeds", "error", err)
 			writeError(w, http.StatusInternalServerError, "Failed to fetch feeds")
 			return
 		}
 
-		slog.Info("fetched blogs", "count", len(blogs))
+		blogs := fetchResult.Blogs
+		failedFeeds := fetchResult.Failed
+
+		slog.Info("fetched blogs", "count", len(blogs), "failed", len(failedFeeds))
 
 		if len(blogs) == 0 {
-			writeJSON(w, http.StatusOK, []DiscoverResult{})
+			resp := DiscoverResponse{
+				Results:     []DiscoverResult{},
+				FailedFeeds: ensureFailedFeeds(failedFeeds),
+			}
+			writeJSON(w, http.StatusOK, resp)
 			return
 		}
 
-		// 5. Save fetched blogs to storage.
+		// 6. Save fetched blogs to storage.
 		if err := store.SaveBlogs(ctx, blogs); err != nil {
 			slog.Error("failed to save blogs", "error", err)
 			writeError(w, http.StatusInternalServerError, "Failed to save blogs")
 			return
 		}
 
-		// 6. Convert to AI blog entries.
+		// 7. Convert to AI blog entries.
 		blogEntries := make([]ai.BlogEntry, len(blogs))
 		for i, b := range blogs {
 			var publishedAt string
@@ -124,7 +143,7 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 			}
 		}
 
-		// 7. Filter and rank with AI.
+		// 8. Filter and rank with AI.
 		slog.Info("ranking blogs with AI", "entries", len(blogEntries))
 		ranked, err := aiProvider.FilterAndRank(ctx, topics, blogEntries)
 		if err != nil {
@@ -140,7 +159,7 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 
 		slog.Info("ranked blogs", "count", len(ranked))
 
-		// 8. Enrich each ranked blog: extract full content if missing, summarize.
+		// 9. Enrich each ranked blog: extract full content if missing, summarize.
 		results := make([]DiscoverResult, 0, len(ranked))
 		selectedIDs := make([]int64, 0, len(ranked))
 
@@ -165,7 +184,7 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 				}
 			}
 
-			// 9. Summarize if not cached.
+			// 10. Summarize if not cached.
 			var summary string
 			hasSummary, err := store.HasSummary(ctx, blog.ID)
 			if err != nil {
@@ -208,7 +227,7 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 				}
 			}
 
-			// 10. Build result.
+			// 11. Build result.
 			var pubAt *string
 			if blog.PublishedAt != nil {
 				v := blog.PublishedAt.Format("2006-01-02T15:04:05Z")
@@ -228,20 +247,126 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 			selectedIDs = append(selectedIDs, blog.ID)
 		}
 
-		// 11. Create audit session.
+		// 12. Create audit session with full results.
 		selectedJSON, _ := json.Marshal(selectedIDs)
+		resultsJSON, _ := json.Marshal(results)
+		failedFeedsJSON, _ := json.Marshal(ensureFailedFeeds(failedFeeds))
+
 		session := &models.DiscoverySession{
 			PreferencesSnapshot: topics,
 			BlogsConsidered:     len(blogEntries),
 			BlogsSelected:       string(selectedJSON),
 			ModelUsed:            cfg.AI.Model,
+			ResultsJSON:         string(resultsJSON),
+			FailedFeedsJSON:     string(failedFeedsJSON),
 		}
-		if _, err := store.CreateSession(ctx, session); err != nil {
+		sessionID, err := store.CreateSession(ctx, session)
+		if err != nil {
 			slog.Warn("failed to create discovery session", "error", err)
 		}
 
-		// 12. Return response.
-		writeJSON(w, http.StatusOK, results)
+		// 13. Return response.
+		resp := DiscoverResponse{
+			Results:     results,
+			FailedFeeds: ensureFailedFeeds(failedFeeds),
+			SessionID:   sessionID,
+			CreatedAt:   session.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		}
+
+		writeJSON(w, http.StatusOK, resp)
 	}
 }
 
+// GetLatestDiscovery handles GET /api/discover/latest. It returns the most
+// recent discovery session's stored results without triggering a new discovery.
+func GetLatestDiscovery(store *storage.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		session, err := store.GetLatestSession(ctx)
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeJSON(w, http.StatusOK, DiscoverResponse{
+					Results:     []DiscoverResult{},
+					FailedFeeds: []feeds.FailedFeed{},
+				})
+				return
+			}
+			slog.Error("failed to get latest session", "error", err)
+			writeError(w, http.StatusInternalServerError, "Failed to load latest discovery")
+			return
+		}
+
+		var results []DiscoverResult
+		if session.ResultsJSON != "" {
+			if err := json.Unmarshal([]byte(session.ResultsJSON), &results); err != nil {
+				slog.Error("failed to unmarshal session results", "error", err)
+				writeError(w, http.StatusInternalServerError, "Failed to parse stored results")
+				return
+			}
+		}
+		if results == nil {
+			results = []DiscoverResult{}
+		}
+
+		var failedFeeds []feeds.FailedFeed
+		if session.FailedFeedsJSON != "" {
+			if err := json.Unmarshal([]byte(session.FailedFeedsJSON), &failedFeeds); err != nil {
+				slog.Warn("failed to unmarshal failed feeds", "error", err)
+			}
+		}
+		if failedFeeds == nil {
+			failedFeeds = []feeds.FailedFeed{}
+		}
+
+		resp := DiscoverResponse{
+			Results:     results,
+			FailedFeeds: failedFeeds,
+			SessionID:   session.ID,
+			CreatedAt:   session.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		}
+
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+// buildFetchOptions reads user feed preferences and falls back to config defaults.
+func buildFetchOptions(store *storage.Store, cfg *config.Config, ctx context.Context) feeds.FetchOptions {
+	opts := feeds.FetchOptions{
+		Mode:         "recent_posts",
+		MaxArticles:  cfg.Feeds.MaxArticlesPerFeed,
+		LookbackDays: cfg.Feeds.LookbackDays,
+	}
+
+	var feedMode string
+	if err := store.GetPreference(ctx, "feed_mode", &feedMode); err == nil {
+		if feedMode == "recent_posts" || feedMode == "time_range" {
+			opts.Mode = feedMode
+		}
+	}
+
+	var maxArticles int
+	if err := store.GetPreference(ctx, "max_articles_per_feed", &maxArticles); err == nil {
+		if maxArticles >= 5 && maxArticles <= 20 {
+			opts.MaxArticles = maxArticles
+		}
+	}
+
+	var lookbackDays int
+	if err := store.GetPreference(ctx, "lookback_days", &lookbackDays); err == nil {
+		if lookbackDays >= 1 && lookbackDays <= 30 {
+			opts.LookbackDays = lookbackDays
+		}
+	}
+
+	return opts
+}
+
+// ensureFailedFeeds returns an empty slice instead of nil for consistent
+// JSON serialization.
+func ensureFailedFeeds(ff []feeds.FailedFeed) []feeds.FailedFeed {
+	if ff == nil {
+		return []feeds.FailedFeed{}
+	}
+	return ff
+}

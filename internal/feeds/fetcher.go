@@ -21,6 +21,34 @@ const (
 	maxWords       = 5000
 )
 
+// FetchOptions controls how feeds are fetched.
+type FetchOptions struct {
+	// Mode is either "recent_posts" or "time_range".
+	// "recent_posts" takes the N most recent posts per feed.
+	// "time_range" filters posts published within LookbackDays.
+	Mode string
+
+	// MaxArticles is the maximum number of recent posts per feed.
+	// Used when Mode is "recent_posts".
+	MaxArticles int
+
+	// LookbackDays filters posts published within the last N days.
+	// Used when Mode is "time_range".
+	LookbackDays int
+}
+
+// FailedFeed records a feed that could not be fetched.
+type FailedFeed struct {
+	Source string `json:"source"`
+	Error  string `json:"error"`
+}
+
+// FetchResult contains the successfully fetched blogs and any failures.
+type FetchResult struct {
+	Blogs  []models.Blog
+	Failed []FailedFeed
+}
+
 // Fetcher handles RSS feed fetching with per-domain rate limiting and
 // bounded concurrency.
 type Fetcher struct {
@@ -59,13 +87,13 @@ func (t *userAgentTransport) RoundTrip(req *http.Request) (*http.Response, error
 }
 
 // FetchAll fetches RSS feeds from all sources concurrently with a maximum of
-// 10 goroutines. Each feed is limited to maxArticles most recent posts.
-// Individual source failures are logged and skipped rather than failing the
-// entire batch.
-func (f *Fetcher) FetchAll(ctx context.Context, sources []models.BlogSource, maxArticles int) ([]models.Blog, error) {
+// 10 goroutines. The FetchOptions control whether to limit by post count
+// (recent_posts mode) or by time range (time_range mode). Individual source
+// failures are collected in FetchResult.Failed rather than failing the entire batch.
+func (f *Fetcher) FetchAll(ctx context.Context, sources []models.BlogSource, opts FetchOptions) (*FetchResult, error) {
 	var (
-		results []models.Blog
-		mu      sync.Mutex
+		result FetchResult
+		mu     sync.Mutex
 	)
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -73,18 +101,26 @@ func (f *Fetcher) FetchAll(ctx context.Context, sources []models.BlogSource, max
 
 	for _, src := range sources {
 		g.Go(func() error {
-			blogs, err := f.fetchSingleFeed(ctx, src, maxArticles)
+			blogs, err := f.fetchSingleFeed(ctx, src, opts)
 			if err != nil {
 				slog.Warn("failed to fetch feed",
 					"source", src.Name,
 					"url", src.FeedURL,
 					"error", err,
 				)
+
+				mu.Lock()
+				result.Failed = append(result.Failed, FailedFeed{
+					Source: src.Name,
+					Error:  err.Error(),
+				})
+				mu.Unlock()
+
 				return nil // skip failures, don't fail the batch
 			}
 
 			mu.Lock()
-			results = append(results, blogs...)
+			result.Blogs = append(result.Blogs, blogs...)
 			mu.Unlock()
 
 			slog.Info("fetched feed",
@@ -99,15 +135,15 @@ func (f *Fetcher) FetchAll(ctx context.Context, sources []models.BlogSource, max
 		return nil, fmt.Errorf("fetching feeds: %w", err)
 	}
 
-	return results, nil
+	return &result, nil
 }
 
 // fetchSingleFeed retrieves and parses a feed from a single source. Sources
 // with a "scrape://" feed URL are fetched via HTML scraping; all others use
 // standard RSS/Atom parsing.
-func (f *Fetcher) fetchSingleFeed(ctx context.Context, source models.BlogSource, maxArticles int) ([]models.Blog, error) {
+func (f *Fetcher) fetchSingleFeed(ctx context.Context, source models.BlogSource, opts FetchOptions) ([]models.Blog, error) {
 	if IsScrapeURL(source.FeedURL) {
-		return f.scrapeBlogPage(source, maxArticles)
+		return f.scrapeBlogPage(source, opts.MaxArticles)
 	}
 
 	domain := extractDomain(source.FeedURL)
@@ -121,7 +157,7 @@ func (f *Fetcher) fetchSingleFeed(ctx context.Context, source models.BlogSource,
 		return nil, fmt.Errorf("parsing feed %q: %w", source.FeedURL, err)
 	}
 
-	blogs := parseFeedItems(source, feed, maxArticles)
+	blogs := parseFeedItems(source, feed, opts)
 	return blogs, nil
 }
 

@@ -43,8 +43,23 @@ export interface DiscoverResult {
   reason: string
 }
 
+export interface FailedFeed {
+  source: string
+  error: string
+}
+
+export interface DiscoverResponse {
+  results: DiscoverResult[]
+  failed_feeds: FailedFeed[]
+  session_id: number
+  created_at: string
+}
+
 export interface Preferences {
   topics?: string
   selected_sources?: number[]
+  feed_mode?: string
+  max_articles_per_feed?: number
+  lookback_days?: number
   [key: string]: unknown
 }

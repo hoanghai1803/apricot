@@ -1,27 +1,67 @@
-import { useState } from 'react'
-import { Sparkles, AlertCircle } from 'lucide-react'
-import type { DiscoverResult } from '@/lib/types'
+import { useState, useEffect } from 'react'
+import { Sparkles, AlertCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
+import type { DiscoverResult, DiscoverResponse, FailedFeed } from '@/lib/types'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { BlogCard } from '@/components/blog-card'
 
+function formatLastDiscovered(dateStr: string): string {
+  if (!dateStr || dateStr === '0001-01-01T00:00:00Z') return ''
+  const date = new Date(dateStr)
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 export function Home() {
   const [results, setResults] = useState<DiscoverResult[]>([])
+  const [failedFeeds, setFailedFeeds] = useState<FailedFeed[]>([])
+  const [failedExpanded, setFailedExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [loadingLatest, setLoadingLatest] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set())
   const [hasSearched, setHasSearched] = useState(false)
+  const [lastDiscoveredAt, setLastDiscoveredAt] = useState('')
+
+  useEffect(() => {
+    async function loadLatest() {
+      try {
+        const data = await api.get<DiscoverResponse>('/api/discover/latest')
+        if (data.results && data.results.length > 0) {
+          setResults(data.results)
+          setFailedFeeds(data.failed_feeds ?? [])
+          setLastDiscoveredAt(data.created_at)
+          setHasSearched(true)
+        }
+      } catch {
+        // Silently ignore -- the user can trigger a fresh discovery.
+      } finally {
+        setLoadingLatest(false)
+      }
+    }
+
+    void loadLatest()
+  }, [])
 
   async function handleDiscover() {
     setLoading(true)
     setError(null)
     setResults([])
+    setFailedFeeds([])
     setAddedIds(new Set())
+    setFailedExpanded(false)
 
     try {
-      const data = await api.post<DiscoverResult[]>('/api/discover')
-      setResults(data)
+      const data = await api.post<DiscoverResponse>('/api/discover')
+      setResults(data.results)
+      setFailedFeeds(data.failed_feeds ?? [])
+      setLastDiscoveredAt(data.created_at)
       setHasSearched(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to discover blogs')
@@ -45,6 +85,20 @@ export function Home() {
     }
   }
 
+  if (loadingLatest) {
+    return (
+      <div className="space-y-8">
+        <div className="space-y-3 text-center">
+          <Skeleton className="mx-auto h-10 w-80" />
+          <Skeleton className="mx-auto h-5 w-96" />
+        </div>
+        <div className="flex justify-center">
+          <Skeleton className="h-11 w-48" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-8">
       <div className="space-y-3 text-center">
@@ -56,7 +110,7 @@ export function Home() {
         </p>
       </div>
 
-      <div className="flex justify-center">
+      <div className="flex flex-col items-center gap-2">
         <Button
           size="lg"
           onClick={handleDiscover}
@@ -66,6 +120,12 @@ export function Home() {
           <Sparkles className="size-5" />
           {loading ? 'Discovering...' : 'Collect Fancy Blogs'}
         </Button>
+
+        {lastDiscoveredAt && !loading && (
+          <p className="text-xs text-muted-foreground">
+            Last discovered: {formatLastDiscovered(lastDiscoveredAt)}
+          </p>
+        )}
       </div>
 
       {error && (
@@ -109,6 +169,37 @@ export function Home() {
               isAdded={addedIds.has(blog.id)}
             />
           ))}
+        </div>
+      )}
+
+      {!loading && failedFeeds.length > 0 && (
+        <div className="mx-auto max-w-2xl rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
+          <button
+            type="button"
+            onClick={() => setFailedExpanded((prev) => !prev)}
+            className="flex w-full items-center justify-between text-sm font-medium text-yellow-700 dark:text-yellow-400"
+          >
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="size-4" />
+              Could not reach {failedFeeds.length} source{failedFeeds.length === 1 ? '' : 's'}
+            </span>
+            {failedExpanded ? (
+              <ChevronUp className="size-4" />
+            ) : (
+              <ChevronDown className="size-4" />
+            )}
+          </button>
+
+          {failedExpanded && (
+            <ul className="mt-3 space-y-1 text-sm text-yellow-700 dark:text-yellow-400">
+              {failedFeeds.map((feed) => (
+                <li key={feed.source} className="flex items-start gap-2">
+                  <span className="shrink-0 font-medium">{feed.source}:</span>
+                  <span className="text-yellow-600 dark:text-yellow-500">{feed.error}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 

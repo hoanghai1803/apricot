@@ -29,6 +29,7 @@ func NewRouter(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fe
 	// API sub-router.
 	r.Route("/api", func(api chi.Router) {
 		api.Post("/discover", handlers.Discover(store, aiProvider, fetcher, cfg))
+		api.Get("/discover/latest", handlers.GetLatestDiscovery(store))
 
 		api.Get("/preferences", handlers.GetPreferences(store))
 		api.Put("/preferences", handlers.UpdatePreferences(store))
