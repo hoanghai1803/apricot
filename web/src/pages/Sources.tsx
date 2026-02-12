@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, Info } from 'lucide-react'
 import type { BlogSource } from '@/lib/types'
 import { api } from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -78,6 +78,14 @@ export function Sources() {
           <p>{error}</p>
         </div>
       )}
+
+      <div className="flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4 text-sm">
+        <Info className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400" />
+        <p className="text-muted-foreground">
+          Some blogs may be unreachable depending on your network. If a source
+          consistently fails to fetch, consider disabling it.
+        </p>
+      </div>
 
       <p className="text-sm text-muted-foreground">
         {activeCount} of {totalCount} sources active

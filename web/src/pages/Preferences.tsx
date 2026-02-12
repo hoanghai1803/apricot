@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Save, Loader2, AlertCircle, Check } from 'lucide-react'
+import { Save, Loader2, AlertCircle, Check, Info } from 'lucide-react'
 import type { BlogSource, Preferences as PreferencesType } from '@/lib/types'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -252,6 +252,14 @@ export function Preferences() {
 
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">Blog Sources</h2>
+
+        <div className="flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4 text-sm">
+          <Info className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400" />
+          <p className="text-muted-foreground">
+            Some blogs may be unreachable depending on your network. If a source
+            consistently fails to fetch, consider disabling it.
+          </p>
+        </div>
 
         {sources.length === 0 ? (
           <p className="text-sm text-muted-foreground">
