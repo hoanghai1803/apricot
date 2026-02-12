@@ -4,7 +4,7 @@ import type { BlogSource, Preferences as PreferencesType } from '@/lib/types'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 
@@ -251,7 +251,12 @@ export function Preferences() {
       <Separator />
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Blog Sources</h2>
+        <div>
+          <h2 className="text-lg font-semibold">Blog Sources</h2>
+          <p className="text-sm text-muted-foreground">
+            {sources.filter((s) => selectedSources.has(s.id)).length} of {sources.length} sources enabled
+          </p>
+        </div>
 
         <div className="flex items-start gap-3 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4 text-sm">
           <Info className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400" />
@@ -261,33 +266,30 @@ export function Preferences() {
           </p>
         </div>
 
-        {sources.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No sources available. Add sources on the{' '}
-            <a href="/sources" className="text-foreground underline underline-offset-4">
-              Sources page
-            </a>
-            .
-          </p>
-        ) : (
+        {sources.length > 0 && (
           <div className="space-y-3">
             {sources.map((source) => (
-              <label
+              <div
                 key={source.id}
-                className="flex cursor-pointer items-center gap-3"
+                className="flex items-center justify-between gap-4 rounded-lg border p-4"
               >
-                <Checkbox
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-medium">{source.company}</span>
+                    <span className="text-sm text-muted-foreground">{source.name}</span>
+                  </div>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">
+                    {source.feed_url}
+                  </p>
+                </div>
+                <Switch
                   checked={selectedSources.has(source.id)}
-                  onCheckedChange={(checked) =>
-                    handleSourceToggle(source.id, checked === true)
+                  onCheckedChange={(checked: boolean) =>
+                    handleSourceToggle(source.id, checked)
                   }
+                  aria-label={`Toggle ${source.company} - ${source.name}`}
                 />
-                <span className="text-sm">
-                  <span className="font-medium">{source.company}</span>
-                  {' '}
-                  <span className="text-muted-foreground">- {source.name}</span>
-                </span>
-              </label>
+              </div>
             ))}
           </div>
         )}

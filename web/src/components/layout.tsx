@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
-import { BookOpen, Home, Settings, Rss, Menu, X } from 'lucide-react'
+import { BookOpen, Home, Settings, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -8,7 +8,6 @@ import { Separator } from '@/components/ui/separator'
 const navItems = [
   { to: '/', label: 'Home', icon: Home },
   { to: '/reading-list', label: 'Reading List', icon: BookOpen },
-  { to: '/sources', label: 'Sources', icon: Rss },
   { to: '/preferences', label: 'Preferences', icon: Settings },
 ] as const
 
