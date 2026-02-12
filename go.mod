@@ -4,6 +4,7 @@ go 1.25.4
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-shiori/go-readability v0.0.0-20251205110129-5db1dc9836f0
 	github.com/mmcdole/gofeed v1.3.0
 	golang.org/x/sync v0.19.0
