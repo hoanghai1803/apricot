@@ -102,9 +102,14 @@ func (f *Fetcher) FetchAll(ctx context.Context, sources []models.BlogSource, max
 	return results, nil
 }
 
-// fetchSingleFeed retrieves and parses an RSS feed from a single source. It
-// respects per-domain rate limiting before making the HTTP request.
+// fetchSingleFeed retrieves and parses a feed from a single source. Sources
+// with a "scrape://" feed URL are fetched via HTML scraping; all others use
+// standard RSS/Atom parsing.
 func (f *Fetcher) fetchSingleFeed(ctx context.Context, source models.BlogSource, maxArticles int) ([]models.Blog, error) {
+	if IsScrapeURL(source.FeedURL) {
+		return f.scrapeBlogPage(source, maxArticles)
+	}
+
 	domain := extractDomain(source.FeedURL)
 	f.waitForRateLimit(domain)
 

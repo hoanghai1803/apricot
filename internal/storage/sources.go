@@ -7,7 +7,8 @@ import (
 	"github.com/hoanghai1803/apricot/internal/models"
 )
 
-// defaultSources defines the 20 engineering blogs seeded into a new database.
+// defaultSources defines the 21 engineering blogs seeded into a new database.
+// Sources with a "scrape://" feed URL are fetched via HTML scraping instead of RSS.
 var defaultSources = []models.BlogSource{
 	{Name: "Netflix Tech Blog", Company: "Netflix", FeedURL: "https://netflixtechblog.com/feed", SiteURL: "https://netflixtechblog.com", IsActive: true},
 	{Name: "Engineering at Meta", Company: "Meta", FeedURL: "https://engineering.fb.com/feed/", SiteURL: "https://engineering.fb.com", IsActive: true},
@@ -16,6 +17,7 @@ var defaultSources = []models.BlogSource{
 	{Name: "Google Research Blog", Company: "Google", FeedURL: "https://blog.research.google/feeds/posts/default?alt=rss", SiteURL: "https://blog.research.google", IsActive: true},
 	{Name: "Google Cloud Blog", Company: "Google", FeedURL: "https://cloudblog.withgoogle.com/rss/", SiteURL: "https://cloud.google.com/blog", IsActive: true},
 	{Name: "Spotify Engineering", Company: "Spotify", FeedURL: "https://engineering.atspotify.com/feed/", SiteURL: "https://engineering.atspotify.com", IsActive: true},
+	{Name: "LinkedIn Engineering", Company: "LinkedIn", FeedURL: "scrape://www.linkedin.com/blog/engineering", SiteURL: "https://www.linkedin.com/blog/engineering", IsActive: true},
 	{Name: "Figma Blog", Company: "Figma", FeedURL: "https://www.figma.com/blog/feed/atom.xml", SiteURL: "https://www.figma.com/blog", IsActive: true},
 	{Name: "Datadog Engineering", Company: "Datadog", FeedURL: "https://www.datadoghq.com/blog/engineering/index.xml", SiteURL: "https://www.datadoghq.com/blog/engineering", IsActive: true},
 	{Name: "Stripe Engineering", Company: "Stripe", FeedURL: "https://stripe.com/blog/feed.rss", SiteURL: "https://stripe.com/blog", IsActive: true},
@@ -84,19 +86,10 @@ func (s *Store) ToggleSource(ctx context.Context, id int64, active bool) error {
 	return nil
 }
 
-// SeedDefaults inserts the default blog sources if the blog_sources table is
-// empty. All inserts happen within a single transaction. This operation is
-// idempotent: calling it on a non-empty table is a no-op.
+// SeedDefaults inserts any missing default blog sources. Uses INSERT OR IGNORE
+// so existing sources (matched by feed_url UNIQUE constraint) are not modified.
+// This is idempotent and safe to call on every startup.
 func (s *Store) SeedDefaults(ctx context.Context) error {
-	var count int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM blog_sources`).Scan(&count); err != nil {
-		return fmt.Errorf("counting blog sources: %w", err)
-	}
-
-	if count > 0 {
-		return nil
-	}
-
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("beginning seed transaction: %w", err)
@@ -104,7 +97,7 @@ func (s *Store) SeedDefaults(ctx context.Context) error {
 	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
 	stmt, err := tx.PrepareContext(ctx,
-		`INSERT INTO blog_sources (name, company, feed_url, site_url, is_active)
+		`INSERT OR IGNORE INTO blog_sources (name, company, feed_url, site_url, is_active)
 		 VALUES (?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("preparing seed statement: %w", err)

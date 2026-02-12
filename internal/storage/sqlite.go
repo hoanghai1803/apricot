@@ -85,6 +85,7 @@ type migration struct {
 // in migrations/*.sql for documentation.
 var migrations = []migration{
 	{Version: 1, SQL: migrationV1},
+	{Version: 2, SQL: migrationV2},
 }
 
 const migrationV1 = `
@@ -271,6 +272,17 @@ func parseTime(s string) time.Time {
 }
 
 // parseTimePtr is like parseTime but returns nil for empty strings.
+const migrationV2 = `
+-- Remove broken blog sources. New replacements are added via SeedDefaults.
+DELETE FROM blog_sources WHERE feed_url IN (
+    'https://cloud.google.com/feeds/cloudblog-google-cloud.xml',
+    'https://shopifyengineering.myshopify.com/blogs/engineering.atom',
+    'https://engineering.linkedin.com/blog.rss.html',
+    'https://doordash.engineering/feed/',
+    'https://blog.x.com/engineering/en_us/blog.rss'
+);
+`
+
 func parseTimePtr(s *string) *time.Time {
 	if s == nil || *s == "" {
 		return nil

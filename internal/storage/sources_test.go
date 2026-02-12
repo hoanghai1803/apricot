@@ -219,7 +219,7 @@ func TestToggleSource_NotFound(t *testing.T) {
 
 func TestDefaultSourceCount(t *testing.T) {
 	got := DefaultSourceCount()
-	if got != 20 {
-		t.Fatalf("DefaultSourceCount() = %d, want 20", got)
+	if got != 21 {
+		t.Fatalf("DefaultSourceCount() = %d, want 21", got)
 	}
 }
