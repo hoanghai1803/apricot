@@ -1,0 +1,32 @@
+# Binary outputs
+bin/
+dist/
+tmp/
+
+# User data
+data/
+*.db
+
+# User config (contains API key)
+config.toml
+
+# Go
+vendor/
+
+# React frontend
+web/node_modules/
+web/dist/
+internal/api/dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Internal docs (not for public repo)
+brainstorm.md
+mvp_plan.md

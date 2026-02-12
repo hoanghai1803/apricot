@@ -1,0 +1,13 @@
+[ai]
+provider = "anthropic"            # "anthropic" or "openai"
+api_key = ""                      # Your API key (or set AI_API_KEY env var)
+model = "claude-haiku-4-5"        # See README for supported models
+
+[server]
+port = 8080
+auto_open_browser = true
+
+[feeds]
+refresh_interval_minutes = 60
+max_articles_per_feed = 20
+lookback_days = 7
