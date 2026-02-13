@@ -36,6 +36,7 @@ func NewRouter(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fe
 
 		api.Get("/reading-list", handlers.GetReadingList(store))
 		api.Post("/reading-list", handlers.AddToReadingList(store))
+		api.Post("/reading-list/custom", handlers.AddCustomBlog(store))
 		api.Patch("/reading-list/{id}", handlers.UpdateReadingListItem(store))
 		api.Delete("/reading-list/{id}", handlers.DeleteReadingListItem(store))
 		api.Post("/reading-list/{id}/tags", handlers.AddTagToItem(store))

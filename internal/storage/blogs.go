@@ -49,7 +49,7 @@ func (s *Store) UpsertBlog(ctx context.Context, blog *models.Blog) (int64, error
 // Returns nil, ErrNotFound if no matching row exists.
 func (s *Store) GetBlogByURL(ctx context.Context, url string) (*models.Blog, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT b.id, b.source_id, COALESCE(bs.name, '') AS source, b.title, b.url,
+		`SELECT b.id, b.source_id, COALESCE(b.custom_source, bs.name, '') AS source, b.title, b.url,
 				b.description, b.full_content, b.published_at, b.fetched_at,
 				b.content_hash, b.created_at
 		 FROM blogs b
@@ -70,7 +70,7 @@ func (s *Store) GetBlogByURL(ctx context.Context, url string) (*models.Blog, err
 // Returns nil, ErrNotFound if no matching row exists.
 func (s *Store) GetBlogByID(ctx context.Context, id int64) (*models.Blog, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT b.id, b.source_id, COALESCE(bs.name, '') AS source, b.title, b.url,
+		`SELECT b.id, b.source_id, COALESCE(b.custom_source, bs.name, '') AS source, b.title, b.url,
 				b.description, b.full_content, b.published_at, b.fetched_at,
 				b.content_hash, b.created_at
 		 FROM blogs b
@@ -85,6 +85,43 @@ func (s *Store) GetBlogByID(ctx context.Context, id int64) (*models.Blog, error)
 		return nil, fmt.Errorf("getting blog by id: %w", err)
 	}
 	return blog, nil
+}
+
+// GetCustomSourceID returns the ID of the sentinel "custom://user-added" source.
+func (s *Store) GetCustomSourceID(ctx context.Context) (int64, error) {
+	var id int64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id FROM blog_sources WHERE feed_url = 'custom://user-added'`,
+	).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("getting custom source id: %w", err)
+	}
+	return id, nil
+}
+
+// CreateCustomBlog inserts a user-added blog post linked to the sentinel
+// "Custom" source. The customSource field overrides the display source name.
+func (s *Store) CreateCustomBlog(ctx context.Context, url, title, description, fullContent, customSource string) (int64, error) {
+	sourceID, err := s.GetCustomSourceID(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO blogs (source_id, title, url, description, full_content, fetched_at, custom_source)
+		 VALUES (?, ?, ?, ?, ?, datetime('now'), ?)`,
+		sourceID, title, url, nullableString(description),
+		nullableString(fullContent), nullableString(customSource),
+	)
+	if err != nil {
+		return 0, fmt.Errorf("creating custom blog: %w", err)
+	}
+
+	var id int64
+	if err := s.db.QueryRowContext(ctx, `SELECT id FROM blogs WHERE url = ?`, url).Scan(&id); err != nil {
+		return 0, fmt.Errorf("getting custom blog id: %w", err)
+	}
+	return id, nil
 }
 
 // SaveBlogs batch-upserts multiple blog posts inside a single transaction.

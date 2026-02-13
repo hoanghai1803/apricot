@@ -21,7 +21,7 @@ func (s *Store) SearchBlogs(ctx context.Context, query string, limit int) ([]mod
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT b.id, b.source_id, COALESCE(bs.name, '') AS source,
+		`SELECT b.id, b.source_id, COALESCE(b.custom_source, bs.name, '') AS source,
 				b.title, b.url, b.description, b.full_content,
 				b.published_at, b.fetched_at, b.content_hash, b.created_at
 		 FROM blogs_fts fts

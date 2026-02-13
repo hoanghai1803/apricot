@@ -43,7 +43,7 @@ func (s *Store) AddToReadingList(ctx context.Context, blogID int64) error {
 func (s *Store) GetReadingList(ctx context.Context, status string) ([]models.ReadingListItem, error) {
 	query := `
 		SELECT rl.id, rl.blog_id, rl.status, rl.notes, rl.added_at, rl.read_at,
-			   b.id, b.source_id, COALESCE(bs.name, '') AS source, b.title, b.url,
+			   b.id, b.source_id, COALESCE(b.custom_source, bs.name, '') AS source, b.title, b.url,
 			   b.description, b.full_content, b.published_at, b.fetched_at,
 			   b.content_hash, b.created_at,
 			   s.summary

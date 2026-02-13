@@ -1,11 +1,22 @@
 import { useState, useEffect, useCallback } from 'react'
-import { AlertCircle, X } from 'lucide-react'
+import { AlertCircle, X, Plus, Loader2, Link } from 'lucide-react'
 import type { ReadingListItem } from '@/lib/types'
 import { api } from '@/lib/api'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
 import { ReadingItem } from '@/components/reading-item'
+import { Toast } from '@/components/toast'
 
 type TabStatus = 'unread' | 'reading' | 'read'
 
@@ -35,6 +46,14 @@ export function ReadingList() {
   const [error, setError] = useState<string | null>(null)
   const [allTags, setAllTags] = useState<string[]>([])
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
+
+  // Add Blog dialog state
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [addUrl, setAddUrl] = useState('')
+  const [addSource, setAddSource] = useState('')
+  const [addLoading, setAddLoading] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
+  const [addSuccess, setAddSuccess] = useState(false)
 
   const fetchTags = useCallback(async () => {
     try {
@@ -153,6 +172,28 @@ export function ReadingList() {
     return tabItems.filter((item) => item.tags.includes(selectedTag))
   }
 
+  async function handleAddCustomBlog() {
+    setAddError(null)
+    setAddLoading(true)
+
+    try {
+      await api.post('/api/reading-list/custom', {
+        url: addUrl.trim(),
+        source: addSource.trim() || undefined,
+      })
+      setAddDialogOpen(false)
+      setAddUrl('')
+      setAddSource('')
+      setAddSuccess(true)
+      setActiveTab('unread')
+      void fetchAll()
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Failed to add blog')
+    } finally {
+      setAddLoading(false)
+    }
+  }
+
   // Collect all unique tags from currently loaded items for the filter bar.
   const usedTags = Array.from(
     new Set(Object.values(items).flat().flatMap((item) => item.tags))
@@ -160,11 +201,23 @@ export function ReadingList() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Reading List</h1>
-        <p className="mt-1 text-muted-foreground">
-          Your saved blog posts, organized by reading status.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Reading List</h1>
+          <p className="mt-1 text-muted-foreground">
+            Your saved blog posts, organized by reading status.
+          </p>
+        </div>
+        <Button
+          onClick={() => {
+            setAddError(null)
+            setAddDialogOpen(true)
+          }}
+          className="shrink-0 gap-2"
+        >
+          <Plus className="size-4" />
+          Add Blog
+        </Button>
       </div>
 
       {error && (
@@ -269,6 +322,94 @@ export function ReadingList() {
           )
         })}
       </Tabs>
+
+      {/* Add Custom Blog Dialog */}
+      <AlertDialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Add Blog to Reading List</AlertDialogTitle>
+            <AlertDialogDescription>
+              Paste any blog post URL and we'll fetch the article details automatically.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="add-url" className="text-sm font-medium">
+                URL <span className="text-destructive">*</span>
+              </label>
+              <div className="relative">
+                <Link className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  id="add-url"
+                  type="url"
+                  value={addUrl}
+                  onChange={(e) => setAddUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && addUrl.trim() && !addLoading) {
+                      void handleAddCustomBlog()
+                    }
+                  }}
+                  placeholder="https://example.com/blog/post"
+                  disabled={addLoading}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent pl-9 pr-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="add-source" className="text-sm font-medium">
+                Source name <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <input
+                id="add-source"
+                type="text"
+                value={addSource}
+                onChange={(e) => setAddSource(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && addUrl.trim() && !addLoading) {
+                    void handleAddCustomBlog()
+                  }
+                }}
+                placeholder="Auto-detected from page"
+                disabled={addLoading}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
+
+            {addError && (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
+                <AlertCircle className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+                <p className="text-destructive">{addError}</p>
+              </div>
+            )}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={addLoading}>Cancel</AlertDialogCancel>
+            <Button
+              onClick={() => void handleAddCustomBlog()}
+              disabled={!addUrl.trim() || addLoading}
+            >
+              {addLoading ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  Fetching article...
+                </>
+              ) : (
+                'Add to Reading List'
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Toast
+        message="Blog added to reading list!"
+        visible={addSuccess}
+        onClose={() => setAddSuccess(false)}
+      />
     </div>
   )
 }

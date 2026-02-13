@@ -34,11 +34,11 @@ var defaultSources = []models.BlogSource{
 }
 
 // GetAllSources returns all blog sources regardless of active status,
-// ordered by name.
+// ordered by name. The sentinel "custom://user-added" source is excluded.
 func (s *Store) GetAllSources(ctx context.Context) ([]models.BlogSource, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, name, company, feed_url, site_url, is_active, created_at
-		 FROM blog_sources ORDER BY name`)
+		 FROM blog_sources WHERE feed_url != 'custom://user-added' ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("querying all sources: %w", err)
 	}
