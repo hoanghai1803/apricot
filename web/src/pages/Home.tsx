@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Sparkles, AlertCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
-import type { DiscoverResult, DiscoverResponse, FailedFeed } from '@/lib/types'
+import type { DiscoverResult, DiscoverResponse, FailedFeed, ReadingListItem } from '@/lib/types'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -32,15 +32,21 @@ export function Home() {
   useEffect(() => {
     async function loadLatest() {
       try {
-        const data = await api.get<DiscoverResponse>('/api/discover/latest')
-        if (data.results && data.results.length > 0) {
-          setResults(data.results)
-          setFailedFeeds(data.failed_feeds ?? [])
-          setLastDiscoveredAt(data.created_at)
+        const [discoverData, readingList] = await Promise.all([
+          api.get<DiscoverResponse>('/api/discover/latest').catch(() => null),
+          api.get<ReadingListItem[]>('/api/reading-list').catch((): ReadingListItem[] => []),
+        ])
+
+        if (discoverData?.results && discoverData.results.length > 0) {
+          setResults(discoverData.results)
+          setFailedFeeds(discoverData.failed_feeds ?? [])
+          setLastDiscoveredAt(discoverData.created_at)
           setHasSearched(true)
         }
-      } catch {
-        // Silently ignore -- the user can trigger a fresh discovery.
+
+        if (readingList.length > 0) {
+          setAddedIds(new Set(readingList.map((item) => item.blog_id)))
+        }
       } finally {
         setLoadingLatest(false)
       }
@@ -77,11 +83,7 @@ export function Home() {
     try {
       await api.post('/api/reading-list', { blog_id: blogId })
     } catch {
-      setAddedIds((prev) => {
-        const next = new Set(prev)
-        next.delete(blogId)
-        return next
-      })
+      // Keep as added — most likely a duplicate (already in reading list).
     }
   }
 
