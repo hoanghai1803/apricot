@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useBlocker } from 'react-router-dom'
 import { Sparkles, AlertCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
 import type { DiscoverResult, DiscoverResponse, FailedFeed, ReadingListItem } from '@/lib/types'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Badge } from '@/components/ui/badge'
 import { BlogCard } from '@/components/blog-card'
+import { ConfirmDialog } from '@/components/confirm-dialog'
 
 function formatLastDiscovered(dateStr: string): string {
   if (!dateStr || dateStr === '0001-01-01T00:00:00Z') return ''
@@ -21,6 +25,7 @@ function formatLastDiscovered(dateStr: string): string {
 export function Home() {
   const [results, setResults] = useState<DiscoverResult[]>([])
   const [failedFeeds, setFailedFeeds] = useState<FailedFeed[]>([])
+  const [filter, setFilter] = useState<'all' | 'new' | 'added'>('all')
   const [failedExpanded, setFailedExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingLatest, setLoadingLatest] = useState(true)
@@ -28,6 +33,14 @@ export function Home() {
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set())
   const [hasSearched, setHasSearched] = useState(false)
   const [lastDiscoveredAt, setLastDiscoveredAt] = useState('')
+
+  const blocker = useBlocker(loading)
+
+  const filterCounts = useMemo(() => {
+    const newCount = results.filter((b) => !addedIds.has(b.id)).length
+    const addedCount = results.filter((b) => addedIds.has(b.id)).length
+    return { all: results.length, new: newCount, added: addedCount }
+  }, [results, addedIds])
 
   useEffect(() => {
     async function loadLatest() {
@@ -162,16 +175,52 @@ export function Home() {
       )}
 
       {!loading && results.length > 0 && (
-        <div className="space-y-4">
-          {results.map((blog) => (
-            <BlogCard
-              key={blog.id}
-              blog={blog}
-              onAddToReadingList={handleAddToReadingList}
-              isAdded={addedIds.has(blog.id)}
-            />
-          ))}
-        </div>
+        <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
+          <TabsList>
+            {([
+              ['all', 'All'],
+              ['new', 'New'],
+              ['added', 'Added'],
+            ] as const).map(([value, label]) => (
+              <TabsTrigger key={value} value={value} className="gap-2">
+                {label}
+                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px]">
+                  {filterCounts[value]}
+                </Badge>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {(['all', 'new', 'added'] as const).map((tab) => {
+            const filtered =
+              tab === 'new'
+                ? results.filter((b) => !addedIds.has(b.id))
+                : tab === 'added'
+                  ? results.filter((b) => addedIds.has(b.id))
+                  : results
+
+            return (
+              <TabsContent key={tab} value={tab} className="mt-6">
+                {filtered.length > 0 ? (
+                  <div className="space-y-4">
+                    {filtered.map((blog) => (
+                      <BlogCard
+                        key={blog.id}
+                        blog={blog}
+                        onAddToReadingList={handleAddToReadingList}
+                        isAdded={addedIds.has(blog.id)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="py-8 text-center text-muted-foreground">
+                    No {tab === 'new' ? 'new' : 'added'} posts to show.
+                  </p>
+                )}
+              </TabsContent>
+            )
+          })}
+        </Tabs>
       )}
 
       {!loading && failedFeeds.length > 0 && (
@@ -217,6 +266,19 @@ export function Home() {
           </p>
         </div>
       )}
+
+      <ConfirmDialog
+        open={blocker.state === 'blocked'}
+        onOpenChange={(open) => {
+          if (!open) blocker.reset?.()
+        }}
+        title="Discovery in progress"
+        description="Blog discovery is still running. If you leave now, the current results will be lost. Are you sure?"
+        confirmLabel="Leave"
+        cancelLabel="Stay"
+        variant="destructive"
+        onConfirm={() => blocker.proceed?.()}
+      />
     </div>
   )
 }

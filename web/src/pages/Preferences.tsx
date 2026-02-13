@@ -18,6 +18,7 @@ export function Preferences() {
   const [feedMode, setFeedMode] = useState<FeedMode>('recent_posts')
   const [maxArticles, setMaxArticles] = useState(10)
   const [lookbackDays, setLookbackDays] = useState(7)
+  const [maxResults, setMaxResults] = useState(10)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -50,6 +51,9 @@ export function Preferences() {
         }
         if (typeof prefsData.lookback_days === 'number') {
           setLookbackDays(prefsData.lookback_days)
+        }
+        if (typeof prefsData.max_results === 'number') {
+          setMaxResults(prefsData.max_results)
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load preferences')
@@ -85,6 +89,7 @@ export function Preferences() {
         feed_mode: feedMode,
         max_articles_per_feed: maxArticles,
         lookback_days: lookbackDays,
+        max_results: maxResults,
       })
       setSuccess(true)
     } catch (err) {
@@ -144,6 +149,40 @@ export function Preferences() {
         <p className="text-xs text-muted-foreground">
           Enter your interests as a comma-separated list or free-form description.
         </p>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Discovery Settings</h2>
+          <p className="text-sm text-muted-foreground">
+            Control how many results the AI returns per discovery run.
+          </p>
+        </div>
+
+        <div className="rounded-lg border bg-muted/30 p-4">
+          <div className="flex items-baseline justify-between">
+            <label htmlFor="max-results" className="text-sm font-medium">
+              Discovery results
+            </label>
+            <span className="text-2xl font-bold tabular-nums">{maxResults}</span>
+          </div>
+          <input
+            id="max-results"
+            type="range"
+            min={5}
+            max={20}
+            step={1}
+            value={maxResults}
+            onChange={(e) => setMaxResults(Number(e.target.value))}
+            className="mt-2 w-full accent-primary"
+          />
+          <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+            <span>5 results</span>
+            <span>20 results</span>
+          </div>
+        </div>
       </div>
 
       <Separator />

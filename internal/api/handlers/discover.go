@@ -60,10 +60,19 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 			return
 		}
 
-		// 3. Load feed preferences for mode, max articles, and lookback days.
+		// 3. Load max discovery results preference.
+		maxResults := 10
+		var maxResultsPref int
+		if err := store.GetPreference(ctx, "max_results", &maxResultsPref); err == nil {
+			if maxResultsPref >= 5 && maxResultsPref <= 20 {
+				maxResults = maxResultsPref
+			}
+		}
+
+		// 4. Load feed preferences for mode, max articles, and lookback days.
 		fetchOpts := buildFetchOptions(store, cfg, ctx)
 
-		// 4. Get active sources.
+		// 5. Get active sources.
 		sources, err := store.GetActiveSources(ctx)
 		if err != nil {
 			slog.Error("failed to get sources", "error", err)
@@ -76,7 +85,7 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 			return
 		}
 
-		// 5. Fetch feeds.
+		// 6. Fetch feeds.
 		slog.Info("fetching feeds", "sources", len(sources), "mode", fetchOpts.Mode)
 		fetchResult, err := fetcher.FetchAll(ctx, sources, fetchOpts)
 		if err != nil {
@@ -99,14 +108,14 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 			return
 		}
 
-		// 6. Save fetched blogs to storage.
+		// 7. Save fetched blogs to storage.
 		if err := store.SaveBlogs(ctx, blogs); err != nil {
 			slog.Error("failed to save blogs", "error", err)
 			writeError(w, http.StatusInternalServerError, "Failed to save blogs")
 			return
 		}
 
-		// 7. Convert to AI blog entries.
+		// 8. Convert to AI blog entries.
 		blogEntries := make([]ai.BlogEntry, len(blogs))
 		for i, b := range blogs {
 			var publishedAt string
@@ -143,23 +152,23 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 			}
 		}
 
-		// 8. Filter and rank with AI.
+		// 9. Filter and rank with AI.
 		slog.Info("ranking blogs with AI", "entries", len(blogEntries))
-		ranked, err := aiProvider.FilterAndRank(ctx, topics, blogEntries)
+		ranked, err := aiProvider.FilterAndRank(ctx, topics, blogEntries, maxResults)
 		if err != nil {
 			slog.Error("failed to rank blogs", "error", err)
 			writeError(w, http.StatusInternalServerError, "Failed to rank blogs with AI")
 			return
 		}
 
-		// Limit to top 10.
-		if len(ranked) > 10 {
-			ranked = ranked[:10]
+		// Limit to configured max.
+		if len(ranked) > maxResults {
+			ranked = ranked[:maxResults]
 		}
 
 		slog.Info("ranked blogs", "count", len(ranked))
 
-		// 9. Enrich each ranked blog: extract full content if missing, summarize.
+		// 10. Enrich each ranked blog: extract full content if missing, summarize.
 		results := make([]DiscoverResult, 0, len(ranked))
 		selectedIDs := make([]int64, 0, len(ranked))
 
@@ -184,7 +193,7 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 				}
 			}
 
-			// 10. Summarize if not cached.
+			// 11. Summarize if not cached.
 			var summary string
 			hasSummary, err := store.HasSummary(ctx, blog.ID)
 			if err != nil {
@@ -227,7 +236,7 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 				}
 			}
 
-			// 11. Build result.
+			// 12. Build result.
 			var pubAt *string
 			if blog.PublishedAt != nil {
 				v := blog.PublishedAt.Format("2006-01-02T15:04:05Z")
@@ -247,7 +256,7 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 			selectedIDs = append(selectedIDs, blog.ID)
 		}
 
-		// 12. Create audit session with full results.
+		// 13. Create audit session with full results.
 		selectedJSON, _ := json.Marshal(selectedIDs)
 		resultsJSON, _ := json.Marshal(results)
 		failedFeedsJSON, _ := json.Marshal(ensureFailedFeeds(failedFeeds))
@@ -265,7 +274,7 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 			slog.Warn("failed to create discovery session", "error", err)
 		}
 
-		// 13. Return response.
+		// 14. Return response.
 		resp := DiscoverResponse{
 			Results:     results,
 			FailedFeeds: ensureFailedFeeds(failedFeeds),

@@ -62,5 +62,6 @@ export interface Preferences {
   feed_mode?: string
   max_articles_per_feed?: number
   lookback_days?: number
+  max_results?: number
   [key: string]: unknown
 }

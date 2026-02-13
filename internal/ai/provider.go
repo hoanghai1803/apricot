@@ -8,8 +8,8 @@ import (
 // AIProvider is the interface that all LLM providers must implement.
 type AIProvider interface {
 	// FilterAndRank selects and ranks blogs based on user preferences.
-	// It returns up to 10 blogs ranked by relevance to the given preferences.
-	FilterAndRank(ctx context.Context, preferences string, blogs []BlogEntry) ([]RankedBlog, error)
+	// It returns up to maxResults blogs ranked by relevance to the given preferences.
+	FilterAndRank(ctx context.Context, preferences string, blogs []BlogEntry, maxResults int) ([]RankedBlog, error)
 
 	// Summarize generates a concise summary of the given blog post.
 	Summarize(ctx context.Context, blog BlogEntry) (string, error)

@@ -25,7 +25,7 @@ func TestFilterAndRankPrompt(t *testing.T) {
 	}
 
 	t.Run("returns non-empty prompts", func(t *testing.T) {
-		systemPrompt, userPrompt := FilterAndRankPrompt(preferences, blogs)
+		systemPrompt, userPrompt := FilterAndRankPrompt(preferences, blogs, 10)
 
 		if systemPrompt == "" {
 			t.Error("expected non-empty system prompt")
@@ -36,7 +36,7 @@ func TestFilterAndRankPrompt(t *testing.T) {
 	})
 
 	t.Run("user prompt contains preferences", func(t *testing.T) {
-		_, userPrompt := FilterAndRankPrompt(preferences, blogs)
+		_, userPrompt := FilterAndRankPrompt(preferences, blogs, 10)
 
 		if !strings.Contains(userPrompt, preferences) {
 			t.Errorf("user prompt should contain preferences %q", preferences)
@@ -44,7 +44,7 @@ func TestFilterAndRankPrompt(t *testing.T) {
 	})
 
 	t.Run("user prompt contains blog titles", func(t *testing.T) {
-		_, userPrompt := FilterAndRankPrompt(preferences, blogs)
+		_, userPrompt := FilterAndRankPrompt(preferences, blogs, 10)
 
 		for _, blog := range blogs {
 			if !strings.Contains(userPrompt, blog.Title) {
@@ -54,7 +54,7 @@ func TestFilterAndRankPrompt(t *testing.T) {
 	})
 
 	t.Run("user prompt contains blog metadata", func(t *testing.T) {
-		_, userPrompt := FilterAndRankPrompt(preferences, blogs)
+		_, userPrompt := FilterAndRankPrompt(preferences, blogs, 10)
 
 		for _, blog := range blogs {
 			if !strings.Contains(userPrompt, blog.Source) {
@@ -70,7 +70,7 @@ func TestFilterAndRankPrompt(t *testing.T) {
 	})
 
 	t.Run("system prompt contains ranking instructions", func(t *testing.T) {
-		systemPrompt, _ := FilterAndRankPrompt(preferences, blogs)
+		systemPrompt, _ := FilterAndRankPrompt(preferences, blogs, 10)
 
 		if !strings.Contains(systemPrompt, "10") {
 			t.Error("system prompt should mention selecting 10 posts")
@@ -80,8 +80,16 @@ func TestFilterAndRankPrompt(t *testing.T) {
 		}
 	})
 
+	t.Run("system prompt respects maxResults", func(t *testing.T) {
+		systemPrompt, _ := FilterAndRankPrompt(preferences, blogs, 15)
+
+		if !strings.Contains(systemPrompt, "15") {
+			t.Error("system prompt should mention selecting 15 posts")
+		}
+	})
+
 	t.Run("handles empty blog list", func(t *testing.T) {
-		systemPrompt, userPrompt := FilterAndRankPrompt(preferences, nil)
+		systemPrompt, userPrompt := FilterAndRankPrompt(preferences, nil, 10)
 
 		if systemPrompt == "" {
 			t.Error("system prompt should be non-empty even with no blogs")
