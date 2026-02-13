@@ -88,11 +88,11 @@ Feed settings (mode, post count, lookback days) are also configurable per-user v
 
 ## Coding Style
 
-Follow the style guides in `.claude/skills/coding/`:
-- **Go**: [go-style-guide.md](.claude/skills/coding/go-style-guide.md) — Uber style guide, 100 Go Mistakes, unit testing patterns
-- **React/TypeScript**: [react-style-guide.md](.claude/skills/coding/react-style-guide.md) — Component patterns, TypeScript conventions, Tailwind/shadcn usage
+Follow the style guides in `agent-skills/coding/` (tool-agnostic, works with any AI assistant):
+- **Go**: [go-style-guide.md](agent-skills/coding/go-style-guide.md) — Uber style guide, 100 Go Mistakes, unit testing patterns
+- **React/TypeScript**: [react-style-guide.md](agent-skills/coding/react-style-guide.md) — Component patterns, TypeScript conventions, Tailwind/shadcn usage
 
-AI business logic skills (prompt templates, LLM patterns) are in `.claude/skills/ai-business/`.
+AI business logic skills (prompt templates, LLM patterns) are in `agent-skills/ai-business/`.
 
 ## Development Notes
 
