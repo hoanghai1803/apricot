@@ -12,13 +12,13 @@ import { Toast } from '@/components/toast'
 type FeedMode = 'recent_posts' | 'time_range'
 
 function sourceHealthTooltip(source: BlogSource): string {
-  if (!source.last_fetch_at) return 'No fetch data yet — run a discovery first'
+  if (!source.last_fetch_at) return 'Healthy — not yet fetched'
   const date = new Date(source.last_fetch_at).toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: 'numeric', minute: '2-digit',
   })
   if (source.last_fetch_ok) return `Healthy — last fetched ${date}`
-  return `Failed — last attempt ${date}\n${source.last_error ?? 'Unknown error'}`
+  return `Failed — last attempt ${date}\nLikely due to network issues`
 }
 
 export function Preferences() {
@@ -400,12 +400,10 @@ export function Preferences() {
                       <span className="font-medium">{source.company}</span>
                       <span className="text-sm text-muted-foreground">{source.name}</span>
                       <span title={sourceHealthTooltip(source)} className="cursor-help">
-                        {!source.last_fetch_at ? (
-                          <Heart className="size-3.5 text-muted-foreground/40" />
-                        ) : source.last_fetch_ok ? (
-                          <Heart className="size-3.5 fill-red-500 text-red-500" />
-                        ) : (
+                        {source.last_fetch_at && !source.last_fetch_ok ? (
                           <HeartCrack className="size-3.5 text-red-500" />
+                        ) : (
+                          <Heart className="size-3.5 fill-red-500 text-red-500" />
                         )}
                       </span>
                     </div>

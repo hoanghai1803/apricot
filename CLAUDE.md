@@ -99,6 +99,12 @@ Follow the style guides in `agent-skills/coding/` (tool-agnostic, works with any
 
 AI business logic skills (prompt templates, LLM patterns) are in `agent-skills/ai-business/`.
 
+## Git Rules
+
+- **NEVER commit or push without an explicit user command.** Only run `git commit` or `git push` when the user explicitly asks (e.g., "commit this", "push it"). Do not proactively commit after completing a task.
+- Do NOT add Claude co-author to commits.
+- Do NOT mention phase numbers in commit messages/titles.
+
 ## Development Notes
 
 - In dev mode (`make dev`), open `http://localhost:5173` (Vite). Vite proxies `/api/*` to Go on `:8080`.
