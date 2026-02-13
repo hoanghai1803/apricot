@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hoanghai1803/apricot/internal/ai"
+	"github.com/hoanghai1803/apricot/internal/config"
 	"github.com/hoanghai1803/apricot/internal/feeds"
 	"github.com/hoanghai1803/apricot/internal/models"
 	"github.com/hoanghai1803/apricot/internal/storage"
@@ -142,7 +144,8 @@ func DeleteReadingListItem(store *storage.Store) http.HandlerFunc {
 
 // AddCustomBlog handles POST /api/reading-list/custom. It fetches article
 // metadata from a user-provided URL and adds it to the reading list.
-func AddCustomBlog(store *storage.Store) http.HandlerFunc {
+// If an AI provider is configured, it also generates a summary for new blogs.
+func AddCustomBlog(store *storage.Store, aiProvider ai.AIProvider, cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -230,6 +233,40 @@ func AddCustomBlog(store *storage.Store) http.HandlerFunc {
 			slog.Error("failed to add custom blog to reading list", "blog_id", blogID, "error", err)
 			writeError(w, http.StatusInternalServerError, "Failed to add to reading list")
 			return
+		}
+
+		// Generate AI summary if none exists yet.
+		if aiProvider != nil {
+			hasSummary, err := store.HasSummary(ctx, blogID)
+			if err != nil {
+				slog.Warn("failed to check summary cache", "blog_id", blogID, "error", err)
+			}
+			if !hasSummary {
+				blog, err := store.GetBlogByID(ctx, blogID)
+				if err != nil {
+					slog.Warn("failed to load blog for summarization", "blog_id", blogID, "error", err)
+				} else {
+					entry := ai.BlogEntry{
+						ID:          blog.ID,
+						Title:       blog.Title,
+						Source:      blog.Source,
+						Description: blog.Description,
+						FullContent: blog.FullContent,
+					}
+					summary, err := aiProvider.Summarize(ctx, entry)
+					if err != nil {
+						slog.Warn("failed to summarize custom blog", "blog_id", blogID, "error", err)
+					} else {
+						if err := store.UpsertSummary(ctx, &models.BlogSummary{
+							BlogID:    blogID,
+							Summary:   summary,
+							ModelUsed: cfg.AI.Model,
+						}); err != nil {
+							slog.Warn("failed to cache custom blog summary", "blog_id", blogID, "error", err)
+						}
+					}
+				}
+			}
 		}
 
 		writeJSON(w, http.StatusCreated, map[string]any{
