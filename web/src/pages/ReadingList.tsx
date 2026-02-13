@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, X } from 'lucide-react'
 import type { ReadingListItem } from '@/lib/types'
 import { api } from '@/lib/api'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -33,6 +33,17 @@ export function ReadingList() {
     read: true,
   })
   const [error, setError] = useState<string | null>(null)
+  const [allTags, setAllTags] = useState<string[]>([])
+  const [selectedTag, setSelectedTag] = useState<string | null>(null)
+
+  const fetchTags = useCallback(async () => {
+    try {
+      const data = await api.get<string[]>('/api/tags')
+      setAllTags(data)
+    } catch {
+      // Non-critical — autocomplete just won't work
+    }
+  }, [])
 
   const fetchTab = useCallback(async (status: TabStatus) => {
     setLoading((prev) => ({ ...prev, [status]: true }))
@@ -48,9 +59,16 @@ export function ReadingList() {
     }
   }, [])
 
+  const fetchAll = useCallback(async () => {
+    await Promise.all([
+      ...tabConfig.map((tab) => fetchTab(tab.value)),
+      fetchTags(),
+    ])
+  }, [fetchTab, fetchTags])
+
   useEffect(() => {
-    void Promise.all(tabConfig.map((tab) => fetchTab(tab.value)))
-  }, [fetchTab])
+    void fetchAll()
+  }, [fetchAll])
 
   async function handleStatusChange(id: number, newStatus: string) {
     const oldItem = Object.values(items)
@@ -126,6 +144,20 @@ export function ReadingList() {
     }
   }
 
+  function handleTagsChange() {
+    void fetchAll()
+  }
+
+  function getFilteredItems(tabItems: ReadingListItem[]) {
+    if (!selectedTag) return tabItems
+    return tabItems.filter((item) => item.tags.includes(selectedTag))
+  }
+
+  // Collect all unique tags from currently loaded items for the filter bar.
+  const usedTags = Array.from(
+    new Set(Object.values(items).flat().flatMap((item) => item.tags))
+  ).sort()
+
   return (
     <div className="space-y-8">
       <div>
@@ -139,6 +171,36 @@ export function ReadingList() {
         <div className="flex items-start gap-3 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm">
           <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
           <p>{error}</p>
+        </div>
+      )}
+
+      {/* Tag filter bar */}
+      {usedTags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">Filter by tag:</span>
+          {usedTags.map((tag) => (
+            <Badge
+              key={tag}
+              variant={selectedTag === tag ? 'default' : 'outline'}
+              className={`cursor-pointer transition-colors ${
+                selectedTag === tag
+                  ? 'bg-primary text-primary-foreground'
+                  : 'border-primary/30 text-primary hover:bg-primary/10'
+              }`}
+              onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+            >
+              {tag}
+              {selectedTag === tag && <X className="ml-1 size-3" />}
+            </Badge>
+          ))}
+          {selectedTag && (
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setSelectedTag(null)}
+            >
+              Clear filter
+            </button>
+          )}
         </div>
       )}
 
@@ -157,46 +219,55 @@ export function ReadingList() {
           ))}
         </TabsList>
 
-        {tabConfig.map((tab) => (
-          <TabsContent key={tab.value} value={tab.value} className="mt-6">
-            {loading[tab.value] ? (
-              <div className="space-y-4">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="space-y-4 rounded-xl border p-6">
-                    <div className="flex items-center justify-between">
-                      <Skeleton className="h-5 w-24" />
-                      <Skeleton className="h-4 w-20" />
+        {tabConfig.map((tab) => {
+          const filtered = getFilteredItems(items[tab.value])
+          return (
+            <TabsContent key={tab.value} value={tab.value} className="mt-6">
+              {loading[tab.value] ? (
+                <div className="space-y-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="space-y-4 rounded-xl border p-6">
+                      <div className="flex items-center justify-between">
+                        <Skeleton className="h-5 w-24" />
+                        <Skeleton className="h-4 w-20" />
+                      </div>
+                      <Skeleton className="h-6 w-3/4" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-2/3" />
+                      </div>
+                      <div className="flex gap-2">
+                        <Skeleton className="h-8 w-28" />
+                        <Skeleton className="h-8 w-28" />
+                      </div>
                     </div>
-                    <Skeleton className="h-6 w-3/4" />
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-full" />
-                      <Skeleton className="h-4 w-2/3" />
-                    </div>
-                    <div className="flex gap-2">
-                      <Skeleton className="h-8 w-28" />
-                      <Skeleton className="h-8 w-28" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : items[tab.value].length === 0 ? (
-              <div className="py-12 text-center">
-                <p className="text-muted-foreground">{tab.emptyMessage}</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {items[tab.value].map((item) => (
-                  <ReadingItem
-                    key={item.id}
-                    item={item}
-                    onStatusChange={handleStatusChange}
-                    onRemove={handleRemove}
-                  />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        ))}
+                  ))}
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="py-12 text-center">
+                  <p className="text-muted-foreground">
+                    {selectedTag
+                      ? `No ${tab.label.toLowerCase()} posts with tag "${selectedTag}"`
+                      : tab.emptyMessage}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filtered.map((item) => (
+                    <ReadingItem
+                      key={item.id}
+                      item={item}
+                      onStatusChange={handleStatusChange}
+                      onRemove={handleRemove}
+                      onTagsChange={handleTagsChange}
+                      allTags={allTags}
+                    />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          )
+        })}
       </Tabs>
     </div>
   )

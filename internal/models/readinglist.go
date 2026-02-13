@@ -10,6 +10,7 @@ type ReadingListItem struct {
 	Summary *string    `json:"summary,omitempty"`
 	Status  string     `json:"status"`
 	Notes   *string    `json:"notes,omitempty"`
+	Tags    []string   `json:"tags"`
 	AddedAt time.Time  `json:"added_at"`
 	ReadAt  *time.Time `json:"read_at,omitempty"`
 }

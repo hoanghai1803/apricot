@@ -115,6 +115,15 @@ func (s *Store) GetReadingList(ctx context.Context, status string) ([]models.Rea
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating reading list rows: %w", err)
 	}
+
+	// Initialize empty Tags slices and load tags from join table.
+	for i := range items {
+		items[i].Tags = []string{}
+	}
+	if err := s.loadTagsForItems(ctx, items); err != nil {
+		return nil, fmt.Errorf("loading tags: %w", err)
+	}
+
 	return items, nil
 }
 

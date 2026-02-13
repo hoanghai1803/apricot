@@ -38,6 +38,11 @@ func NewRouter(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fe
 		api.Post("/reading-list", handlers.AddToReadingList(store))
 		api.Patch("/reading-list/{id}", handlers.UpdateReadingListItem(store))
 		api.Delete("/reading-list/{id}", handlers.DeleteReadingListItem(store))
+		api.Post("/reading-list/{id}/tags", handlers.AddTagToItem(store))
+		api.Delete("/reading-list/{id}/tags/{tag}", handlers.RemoveTagFromItem(store))
+
+		api.Get("/tags", handlers.GetAllTags(store))
+		api.Get("/search", handlers.SearchBlogs(store))
 
 		api.Get("/sources", handlers.GetSources(store))
 		api.Put("/sources/{id}", handlers.ToggleSource(store))

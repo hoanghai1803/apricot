@@ -29,6 +29,7 @@ export interface ReadingListItem {
   summary?: string
   status: 'unread' | 'reading' | 'read'
   notes?: string
+  tags: string[]
   added_at: string
   read_at?: string
 }
