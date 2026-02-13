@@ -1,20 +1,15 @@
 package feeds
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	readability "github.com/go-shiori/go-readability"
 )
-
-// browserHeaders sets browser-like request headers so sites that check Accept
-// or User-Agent (e.g. Uber) don't reject the request with 406.
-func browserHeaders(r *http.Request) {
-	r.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	r.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Apricot/1.0; +https://github.com/hoanghai1803/apricot)")
-}
 
 // ArticleMetadata holds full metadata extracted from a web page.
 type ArticleMetadata struct {
@@ -25,22 +20,27 @@ type ArticleMetadata struct {
 	PublishedAt *time.Time
 }
 
-// extractFullText fetches the web page at the given URL and returns its main
-// readable text content using go-readability.
-func extractFullText(url string, timeout time.Duration) (string, error) {
-	article, err := readability.FromURL(url, timeout, browserHeaders)
+// extractFullText fetches the web page using the given HTTP client and returns
+// its main readable text content using go-readability's FromReader. Using the
+// shared HTTP client ensures consistent User-Agent headers and TLS settings.
+func extractFullText(client *http.Client, rawURL string) (string, error) {
+	article, err := fetchAndParse(client, rawURL)
 	if err != nil {
-		return "", fmt.Errorf("readability extraction: %w", err)
+		return "", err
 	}
 	return article.TextContent, nil
 }
 
-// ExtractArticleMetadata fetches a web page and returns its full metadata
-// (title, site name, excerpt, text content, published date).
-func ExtractArticleMetadata(url string, timeout time.Duration) (*ArticleMetadata, error) {
-	article, err := readability.FromURL(url, timeout, browserHeaders)
+// ExtractArticleMetadata fetches a web page using the fetcher's HTTP client
+// and returns its full metadata (title, site name, excerpt, text content,
+// published date).
+func (f *Fetcher) ExtractArticleMetadata(ctx context.Context, rawURL string) (*ArticleMetadata, error) {
+	domain := extractDomain(rawURL)
+	f.waitForRateLimit(domain)
+
+	article, err := fetchAndParse(f.client, rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("readability extraction: %w", err)
+		return nil, err
 	}
 
 	meta := &ArticleMetadata{
@@ -53,6 +53,33 @@ func ExtractArticleMetadata(url string, timeout time.Duration) (*ArticleMetadata
 		meta.PublishedAt = article.PublishedTime
 	}
 	return meta, nil
+}
+
+// fetchAndParse fetches a page using the given HTTP client and parses it with
+// go-readability's FromReader. This avoids readability's internal HTTP client
+// which has shorter timeouts and a bot-like User-Agent.
+func fetchAndParse(client *http.Client, rawURL string) (readability.Article, error) {
+	resp, err := client.Get(rawURL)
+	if err != nil {
+		return readability.Article{}, fmt.Errorf("readability extraction: failed to fetch the page: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return readability.Article{}, fmt.Errorf("readability extraction: HTTP %d for %s", resp.StatusCode, rawURL)
+	}
+
+	pageURL, err := url.Parse(rawURL)
+	if err != nil {
+		return readability.Article{}, fmt.Errorf("readability extraction: invalid URL %q: %w", rawURL, err)
+	}
+
+	article, err := readability.FromReader(resp.Body, pageURL)
+	if err != nil {
+		return readability.Article{}, fmt.Errorf("readability extraction: %w", err)
+	}
+
+	return article, nil
 }
 
 // truncateWords returns the first maxWords whitespace-delimited words from s.

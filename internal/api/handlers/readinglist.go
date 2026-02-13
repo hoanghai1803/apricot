@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/hoanghai1803/apricot/internal/ai"
 	"github.com/hoanghai1803/apricot/internal/config"
@@ -145,7 +144,7 @@ func DeleteReadingListItem(store *storage.Store) http.HandlerFunc {
 // AddCustomBlog handles POST /api/reading-list/custom. It fetches article
 // metadata from a user-provided URL and adds it to the reading list.
 // If an AI provider is configured, it also generates a summary for new blogs.
-func AddCustomBlog(store *storage.Store, aiProvider ai.AIProvider, cfg *config.Config) http.HandlerFunc {
+func AddCustomBlog(store *storage.Store, fetcher *feeds.Fetcher, aiProvider ai.AIProvider, cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -185,7 +184,7 @@ func AddCustomBlog(store *storage.Store, aiProvider ai.AIProvider, cfg *config.C
 			blogID = existing.ID
 		} else {
 			// Fetch article metadata from URL.
-			meta, err := feeds.ExtractArticleMetadata(body.URL, 30*time.Second)
+			meta, err := fetcher.ExtractArticleMetadata(ctx, body.URL)
 			if err != nil {
 				slog.Warn("failed to extract article metadata", "url", body.URL, "error", err)
 				writeError(w, http.StatusUnprocessableEntity, "Could not fetch article from URL")

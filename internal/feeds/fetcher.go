@@ -2,8 +2,10 @@ package feeds
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -19,6 +21,8 @@ const (
 	maxConcurrent  = 10
 	rateLimitDelay = 1 * time.Second
 	maxWords       = 5000
+	maxRetries     = 2
+	retryBaseDelay = 2 * time.Second
 )
 
 // FetchOptions controls how feeds are fetched.
@@ -58,13 +62,29 @@ type Fetcher struct {
 }
 
 // NewFetcher creates a Fetcher with a custom HTTP client configured with a
-// 30-second timeout and the Apricot user agent.
+// 30-second timeout, increased TLS handshake timeout, and browser-like
+// User-Agent.
 func NewFetcher() *Fetcher {
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:  20 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		TLSClientConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
+	}
+
 	return &Fetcher{
 		client: &http.Client{
 			Timeout: httpTimeout,
 			Transport: &userAgentTransport{
-				base: http.DefaultTransport,
+				base: transport,
 			},
 		},
 		rateLimiter: make(map[string]time.Time),
@@ -140,34 +160,52 @@ func (f *Fetcher) FetchAll(ctx context.Context, sources []models.BlogSource, opt
 
 // fetchSingleFeed retrieves and parses a feed from a single source. Sources
 // with a "scrape://" feed URL are fetched via HTML scraping; all others use
-// standard RSS/Atom parsing.
+// standard RSS/Atom parsing. Retries up to maxRetries times on failure.
 func (f *Fetcher) fetchSingleFeed(ctx context.Context, source models.BlogSource, opts FetchOptions) ([]models.Blog, error) {
 	if IsScrapeURL(source.FeedURL) {
 		return f.scrapeBlogPage(source, opts.MaxArticles)
 	}
 
-	domain := extractDomain(source.FeedURL)
-	f.waitForRateLimit(domain)
+	var lastErr error
+	for attempt := range maxRetries {
+		domain := extractDomain(source.FeedURL)
+		f.waitForRateLimit(domain)
 
-	fp := gofeed.NewParser()
-	fp.Client = f.client
+		fp := gofeed.NewParser()
+		fp.Client = f.client
 
-	feed, err := fp.ParseURLWithContext(source.FeedURL, ctx)
-	if err != nil {
-		return nil, fmt.Errorf("parsing feed %q: %w", source.FeedURL, err)
+		feed, err := fp.ParseURLWithContext(source.FeedURL, ctx)
+		if err != nil {
+			lastErr = err
+			if attempt < maxRetries-1 {
+				delay := retryBaseDelay * time.Duration(1<<attempt)
+				slog.Debug("retrying feed fetch",
+					"source", source.Name,
+					"attempt", attempt+1,
+					"delay", delay,
+					"error", err,
+				)
+				time.Sleep(delay)
+				continue
+			}
+			break
+		}
+
+		blogs := parseFeedItems(source, feed, opts)
+		return blogs, nil
 	}
 
-	blogs := parseFeedItems(source, feed, opts)
-	return blogs, nil
+	return nil, fmt.Errorf("parsing feed %q: %w", source.FeedURL, lastErr)
 }
 
 // ExtractArticle fetches the full article text from the given URL using
-// go-readability. The returned text is truncated to 5000 words maximum.
+// go-readability. Uses the fetcher's HTTP client for consistent User-Agent
+// and TLS settings. The returned text is truncated to 5000 words maximum.
 func (f *Fetcher) ExtractArticle(ctx context.Context, articleURL string) (string, error) {
 	domain := extractDomain(articleURL)
 	f.waitForRateLimit(domain)
 
-	text, err := extractFullText(articleURL, httpTimeout)
+	text, err := extractFullText(f.client, articleURL)
 	if err != nil {
 		return "", fmt.Errorf("extracting article from %q: %w", articleURL, err)
 	}
