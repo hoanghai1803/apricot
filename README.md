@@ -2,7 +2,7 @@
 
 AI-powered tech blog curator that runs on your machine.
 
-Uses your chosen AI provider (Anthropic Claude, OpenAI) to filter, rank, and summarize engineering blog posts from 20+ top tech companies based on your interests. All data stays local — no cloud, no accounts, no tracking.
+Uses your chosen AI provider (Anthropic Claude, OpenAI) to filter, rank, and summarize engineering blog posts from top tech companies based on your interests. All data stays local — no cloud, no accounts, no tracking.
 
 ## Quick Start
 
@@ -22,10 +22,13 @@ make run
 
 ## Features
 
-- **Curated feeds** — Pulls from 20+ engineering blogs: Netflix, Uber, AWS, Google, Spotify, Meta, Stripe, Cloudflare, and more
-- **AI-powered ranking** — Your LLM filters hundreds of posts down to the 10 most relevant to your interests
+- **Curated feeds** — Pulls from 21 engineering blogs: Netflix, Meta, Uber, AWS, Google, Spotify, Stripe, Cloudflare, LinkedIn, Figma, Vercel, Datadog, and more
+- **AI-powered ranking** — Your LLM filters posts down to the 10 most relevant to your interests
 - **Smart summaries** — 4-5 sentence technical summaries so you can decide what's worth a full read
-- **Reading list** — Save posts, track what you've read, add personal notes
+- **Reading list** — Save posts, track reading progress (unread / reading / read)
+- **Configurable feed settings** — Choose between "most recent N posts" or "posts from last N days" per source
+- **Persistent results** — Discovery results are saved and restored on page reload (no redundant API calls)
+- **Dark / light theme** — Dark navy theme with apricot accent, plus light mode and system preference detection
 - **Runs locally** — Single binary, SQLite database, your data never leaves your machine
 - **Bring your own key** — Works with Anthropic Claude or OpenAI, you control the cost
 
@@ -64,44 +67,47 @@ lookback_days = 7
 **API key** can also be set via environment variable (takes priority over config file):
 
 ```bash
-# Generic (works for any provider)
-AI_API_KEY=sk-... make run
-
-# Provider-specific
-ANTHROPIC_API_KEY=sk-ant-... make run
+AI_API_KEY=sk-... make run              # Generic (works for any provider)
+ANTHROPIC_API_KEY=sk-ant-... make run   # Provider-specific
 OPENAI_API_KEY=sk-... make run
 ```
+
+Feed settings (post count vs time range, slider values) are also configurable per-user in the Preferences page and stored in the database.
 
 ## How It Works
 
 ```
 You click "Collect Fancy Blogs"
-        │
-        ▼
-┌─ Go backend fetches RSS feeds from 20+ blogs (parallel) ─┐
-│  Netflix, Uber, AWS, Google, Spotify, Meta, Stripe, ...   │
-└───────────────────────┬───────────────────────────────────┘
-                        ▼
-         AI filters & ranks by your interests
-            (titles + descriptions only — fast & cheap)
-                        │
-                        ▼
-              Top 10 posts selected
-                        │
-                        ▼
-         Full article text extracted for each
-                        │
-                        ▼
-         AI generates 4-5 sentence summaries
-                        │
-                        ▼
-     Results displayed with summaries & match reasons
-     ┌──────────────────────────────────────────────┐
-     │  "Add to Reading List"  │  "Read Original"   │
-     └──────────────────────────────────────────────┘
+        |
+        v
+  Go backend fetches RSS feeds from 21 blogs (parallel)
+  + HTML scraping for sites without RSS (e.g., LinkedIn)
+        |
+        v
+  AI filters & ranks by your interests
+  (titles + descriptions only -- fast & cheap)
+        |
+        v
+  Top 10 posts selected
+        |
+        v
+  Full article text extracted for each
+        |
+        v
+  AI generates 4-5 sentence summaries
+        |
+        v
+  Results displayed with summaries & match reasons
+  Results cached -- reload the page, they're still there
 ```
 
-Everything is cached in a local SQLite database. Summaries are never regenerated for posts you've already seen.
+## Blog Sources
+
+21 default sources, all toggleable in Preferences:
+
+Netflix, Meta, Uber, AWS, Google (Research + Cloud), Spotify, LinkedIn, Figma, Datadog, Stripe, Airbnb, Grab, Cloudflare, Slack, GitHub, Vercel, Dropbox, Instacart, Pinterest, Lyft
+
+Some sources use RSS feeds, LinkedIn uses HTML scraping. Sources that are unreachable from your network can be disabled in Preferences.
 
 ## Development
 
@@ -118,9 +124,10 @@ In dev mode, open `http://localhost:5173`. Vite proxies API calls to the Go back
 | Layer | Technology |
 |-------|-----------|
 | Backend | Go, chi router, SQLite (pure Go, no CGO) |
-| Frontend | React, TypeScript, Vite, shadcn/ui, Tailwind CSS |
+| Frontend | React 19, TypeScript, Vite, shadcn/ui, Tailwind CSS v4 |
 | AI | Pluggable provider (Anthropic / OpenAI) via raw HTTP |
 | RSS | gofeed (parsing), go-readability (content extraction) |
+| Scraping | golang.org/x/net/html (LinkedIn fallback) |
 
 ### Project Structure
 
@@ -130,23 +137,14 @@ internal/
   config/            TOML config parsing
   models/            Domain types
   storage/           SQLite layer (migrations, CRUD)
-  feeds/             RSS fetching & content extraction
+  feeds/             RSS fetching, HTML scraping, content extraction
   ai/                LLM provider interface & implementations
   api/               HTTP router, handlers, embedded SPA
-migrations/          SQL migration files
-web/                 React SPA (Vite + TypeScript + shadcn/ui)
-```
-
-## Pre-Built Binaries
-
-Download from the [Releases](https://github.com/hoanghai1803/apricot/releases) page:
-
-```
-apricot-darwin-arm64        macOS Apple Silicon
-apricot-darwin-amd64        macOS Intel
-apricot-linux-amd64         Linux x86_64
-apricot-linux-arm64         Linux ARM64
-apricot-windows-amd64.exe   Windows x86_64
+migrations/          SQL migration files (V1-V3)
+web/                 React SPA
+  src/pages/         Home, Preferences, ReadingList
+  src/components/    BlogCard, ReadingItem, ConfirmDialog, Toast, Layout
+  src/lib/           API client, types, utils, theme
 ```
 
 ## License
