@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -40,7 +41,18 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		// 1. Check if AI provider is configured.
+		// 1. Parse optional request body for mode.
+		var reqBody struct {
+			Mode string `json:"mode"` // "normal" (default) or "serendipity"
+		}
+		if r.Body != nil {
+			if body, err := io.ReadAll(r.Body); err == nil && len(body) > 0 {
+				_ = json.Unmarshal(body, &reqBody)
+			}
+		}
+		serendipity := reqBody.Mode == "serendipity"
+
+		// 2. Check if AI provider is configured.
 		if aiProvider == nil {
 			writeError(w, http.StatusServiceUnavailable,
 				"AI provider not configured. Add your API key to config.toml")
@@ -154,7 +166,7 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 
 		// 9. Filter and rank with AI.
 		slog.Info("ranking blogs with AI", "entries", len(blogEntries))
-		ranked, err := aiProvider.FilterAndRank(ctx, topics, blogEntries, maxResults)
+		ranked, err := aiProvider.FilterAndRank(ctx, topics, blogEntries, maxResults, serendipity)
 		if err != nil {
 			slog.Error("failed to rank blogs", "error", err)
 			writeError(w, http.StatusInternalServerError, "Failed to rank blogs with AI")

@@ -9,7 +9,8 @@ import (
 type AIProvider interface {
 	// FilterAndRank selects and ranks blogs based on user preferences.
 	// It returns up to maxResults blogs ranked by relevance to the given preferences.
-	FilterAndRank(ctx context.Context, preferences string, blogs []BlogEntry, maxResults int) ([]RankedBlog, error)
+	// When serendipity is true, it deliberately picks posts outside the user's interests.
+	FilterAndRank(ctx context.Context, preferences string, blogs []BlogEntry, maxResults int, serendipity bool) ([]RankedBlog, error)
 
 	// Summarize generates a concise summary of the given blog post.
 	Summarize(ctx context.Context, blog BlogEntry) (string, error)

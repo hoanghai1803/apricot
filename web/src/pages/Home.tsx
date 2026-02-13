@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useBlocker } from 'react-router-dom'
-import { Sparkles, AlertCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
-import type { DiscoverResult, DiscoverResponse, FailedFeed, ReadingListItem } from '@/lib/types'
+import { Sparkles, Shuffle, AlertCircle, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
+import type { DiscoverResult, DiscoverResponse, FailedFeed, ReadingListItem, Preferences } from '@/lib/types'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -10,10 +10,11 @@ import { Badge } from '@/components/ui/badge'
 import { BlogCard } from '@/components/blog-card'
 import { ConfirmDialog } from '@/components/confirm-dialog'
 
-function formatLastDiscovered(dateStr: string): string {
+function formatLastDiscovered(dateStr: string, timezone: string): string {
   if (!dateStr || dateStr === '0001-01-01T00:00:00Z') return ''
   const date = new Date(dateStr)
   return date.toLocaleString('en-US', {
+    timeZone: timezone,
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -33,6 +34,7 @@ export function Home() {
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set())
   const [hasSearched, setHasSearched] = useState(false)
   const [lastDiscoveredAt, setLastDiscoveredAt] = useState('')
+  const [timezone, setTimezone] = useState('UTC')
 
   const blocker = useBlocker(loading)
 
@@ -45,10 +47,15 @@ export function Home() {
   useEffect(() => {
     async function loadLatest() {
       try {
-        const [discoverData, readingList] = await Promise.all([
+        const [discoverData, readingList, prefs] = await Promise.all([
           api.get<DiscoverResponse>('/api/discover/latest').catch(() => null),
           api.get<ReadingListItem[]>('/api/reading-list').catch((): ReadingListItem[] => []),
+          api.get<Preferences>('/api/preferences').catch(() => null),
         ])
+
+        if (prefs?.timezone) {
+          setTimezone(prefs.timezone)
+        }
 
         if (discoverData?.results && discoverData.results.length > 0) {
           setResults(discoverData.results)
@@ -68,7 +75,7 @@ export function Home() {
     void loadLatest()
   }, [])
 
-  async function handleDiscover() {
+  async function handleDiscover(mode: 'normal' | 'serendipity' = 'normal') {
     setLoading(true)
     setError(null)
     setResults([])
@@ -77,7 +84,7 @@ export function Home() {
     setFailedExpanded(false)
 
     try {
-      const data = await api.post<DiscoverResponse>('/api/discover')
+      const data = await api.post<DiscoverResponse>('/api/discover', { mode })
       setResults(data.results)
       setFailedFeeds(data.failed_feeds ?? [])
       setLastDiscoveredAt(new Date().toISOString())
@@ -126,19 +133,31 @@ export function Home() {
       </div>
 
       <div className="flex flex-col items-center gap-2">
-        <Button
-          size="lg"
-          onClick={handleDiscover}
-          disabled={loading}
-          className="gap-2"
-        >
-          <Sparkles className="size-5" />
-          {loading ? 'Discovering...' : 'Collect Fancy Blogs'}
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            size="lg"
+            onClick={() => handleDiscover('normal')}
+            disabled={loading}
+            className="gap-2"
+          >
+            <Sparkles className="size-5" />
+            {loading ? 'Discovering...' : 'Collect Fancy Blogs'}
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            onClick={() => handleDiscover('serendipity')}
+            disabled={loading}
+            className="gap-2"
+          >
+            <Shuffle className="size-5" />
+            Surprise Me
+          </Button>
+        </div>
 
-        {!loading && formatLastDiscovered(lastDiscoveredAt) && (
+        {!loading && formatLastDiscovered(lastDiscoveredAt, timezone) && (
           <p className="text-xs text-muted-foreground">
-            Last discovered: {formatLastDiscovered(lastDiscoveredAt)}
+            Last discovered: {formatLastDiscovered(lastDiscoveredAt, timezone)}
           </p>
         )}
       </div>

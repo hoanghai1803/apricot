@@ -19,6 +19,7 @@ export function Preferences() {
   const [maxArticles, setMaxArticles] = useState(10)
   const [lookbackDays, setLookbackDays] = useState(7)
   const [maxResults, setMaxResults] = useState(10)
+  const [timezone, setTimezone] = useState('UTC')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -55,6 +56,9 @@ export function Preferences() {
         if (typeof prefsData.max_results === 'number') {
           setMaxResults(prefsData.max_results)
         }
+        if (prefsData.timezone) {
+          setTimezone(prefsData.timezone)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load preferences')
       } finally {
@@ -90,6 +94,7 @@ export function Preferences() {
         max_articles_per_feed: maxArticles,
         lookback_days: lookbackDays,
         max_results: maxResults,
+        timezone,
       })
       setSuccess(true)
     } catch (err) {
@@ -157,7 +162,7 @@ export function Preferences() {
         <div>
           <h2 className="text-lg font-semibold">Discovery Settings</h2>
           <p className="text-sm text-muted-foreground">
-            Control how many results the AI returns per discovery run.
+            Control how many results the AI returns and how times are displayed.
           </p>
         </div>
 
@@ -182,6 +187,53 @@ export function Preferences() {
             <span>5 results</span>
             <span>20 results</span>
           </div>
+        </div>
+
+        <div className="rounded-lg border bg-muted/30 p-4">
+          <div className="flex items-baseline justify-between">
+            <label htmlFor="timezone" className="text-sm font-medium">
+              Timezone
+            </label>
+          </div>
+          <select
+            id="timezone"
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            {[
+              ['UTC', 'UTC (±0:00)'],
+              ['Pacific/Midway', 'Midway (UTC−11:00)'],
+              ['Pacific/Honolulu', 'Honolulu (UTC−10:00)'],
+              ['America/Anchorage', 'Anchorage (UTC−9:00)'],
+              ['America/Los_Angeles', 'Los Angeles (UTC−8:00)'],
+              ['America/Denver', 'Denver (UTC−7:00)'],
+              ['America/Chicago', 'Chicago (UTC−6:00)'],
+              ['America/New_York', 'New York (UTC−5:00)'],
+              ['America/Sao_Paulo', 'São Paulo (UTC−3:00)'],
+              ['Atlantic/Reykjavik', 'Reykjavik (UTC±0:00)'],
+              ['Europe/London', 'London (UTC+0:00)'],
+              ['Europe/Paris', 'Paris (UTC+1:00)'],
+              ['Europe/Berlin', 'Berlin (UTC+1:00)'],
+              ['Europe/Helsinki', 'Helsinki (UTC+2:00)'],
+              ['Europe/Moscow', 'Moscow (UTC+3:00)'],
+              ['Asia/Dubai', 'Dubai (UTC+4:00)'],
+              ['Asia/Kolkata', 'Kolkata (UTC+5:30)'],
+              ['Asia/Dhaka', 'Dhaka (UTC+6:00)'],
+              ['Asia/Bangkok', 'Bangkok (UTC+7:00)'],
+              ['Asia/Ho_Chi_Minh', 'Ho Chi Minh (UTC+7:00)'],
+              ['Asia/Singapore', 'Singapore (UTC+8:00)'],
+              ['Asia/Shanghai', 'Shanghai (UTC+8:00)'],
+              ['Asia/Tokyo', 'Tokyo (UTC+9:00)'],
+              ['Asia/Seoul', 'Seoul (UTC+9:00)'],
+              ['Australia/Sydney', 'Sydney (UTC+10:00)'],
+              ['Pacific/Auckland', 'Auckland (UTC+12:00)'],
+            ].map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

@@ -61,8 +61,8 @@ type openaiResponse struct {
 
 // FilterAndRank selects and ranks blogs based on user preferences using the
 // OpenAI Chat Completions API.
-func (p *OpenAIProvider) FilterAndRank(ctx context.Context, preferences string, blogs []BlogEntry, maxResults int) ([]RankedBlog, error) {
-	systemPrompt, userPrompt := FilterAndRankPrompt(preferences, blogs, maxResults)
+func (p *OpenAIProvider) FilterAndRank(ctx context.Context, preferences string, blogs []BlogEntry, maxResults int, serendipity bool) ([]RankedBlog, error) {
+	systemPrompt, userPrompt := FilterAndRankPrompt(preferences, blogs, maxResults, serendipity)
 
 	text, err := p.callAPI(ctx, systemPrompt, userPrompt)
 	if err != nil {
