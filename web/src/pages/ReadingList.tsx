@@ -74,6 +74,9 @@ export function ReadingList() {
       [newStatus as TabStatus]: prev[newStatus as TabStatus] + 1,
     }))
 
+    // Jump to the target tab so the user sees the moved item.
+    setActiveTab(newStatus as TabStatus)
+
     try {
       await api.patch(`/api/reading-list/${id}`, { status: newStatus })
     } catch {

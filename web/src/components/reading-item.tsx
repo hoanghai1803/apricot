@@ -44,11 +44,7 @@ export function ReadingItem({ item, onStatusChange, onRemove }: ReadingItemProps
   const url = item.blog?.url
   const source = item.blog?.source
 
-  const nextStatus =
-    item.status === 'unread' ? 'reading' :
-    item.status === 'reading' ? 'read' : 'unread'
-
-  const statusInfo = statusLabels[nextStatus]
+  const confirmInfo = statusConfirm ? statusLabels[statusConfirm] : null
 
   return (
     <>
@@ -87,16 +83,30 @@ export function ReadingItem({ item, onStatusChange, onRemove }: ReadingItemProps
         )}
 
         <CardFooter className="flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setStatusConfirm(nextStatus)}
-          >
-            {nextStatus === 'reading' && <BookOpen className="size-4" />}
-            {nextStatus === 'read' && <CheckCircle className="size-4" />}
-            {nextStatus === 'unread' && <RotateCcw className="size-4" />}
-            {statusInfo.action}
-          </Button>
+          {item.status === 'unread' && (
+            <Button variant="outline" size="sm" onClick={() => setStatusConfirm('reading')}>
+              <BookOpen className="size-4" />
+              Start Reading
+            </Button>
+          )}
+          {item.status === 'reading' && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setStatusConfirm('read')}>
+                <CheckCircle className="size-4" />
+                Mark as Read
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setStatusConfirm('unread')}>
+                <RotateCcw className="size-4" />
+                Back to Unread
+              </Button>
+            </>
+          )}
+          {item.status === 'read' && (
+            <Button variant="outline" size="sm" onClick={() => setStatusConfirm('unread')}>
+              <RotateCcw className="size-4" />
+              Back to Unread
+            </Button>
+          )}
 
           {url && (
             <Button variant="outline" size="sm" asChild>
@@ -118,13 +128,13 @@ export function ReadingItem({ item, onStatusChange, onRemove }: ReadingItemProps
         </CardFooter>
       </Card>
 
-      {statusConfirm && (
+      {statusConfirm && confirmInfo && (
         <ConfirmDialog
           open
           onOpenChange={() => setStatusConfirm(null)}
-          title={statusInfo.action}
-          description={statusInfo.description}
-          confirmLabel={statusInfo.action}
+          title={confirmInfo.action}
+          description={confirmInfo.description}
+          confirmLabel={confirmInfo.action}
           onConfirm={() => onStatusChange(item.id, statusConfirm)}
         />
       )}
