@@ -26,7 +26,3 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
-
-# Internal docs (not for public repo)
-brainstorm.md
-mvp_plan.md

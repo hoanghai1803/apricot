@@ -6,8 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Apricot is a local, open-source AI-powered tech blog curator. A single Go binary serves a React SPA (embedded via `go:embed`), fetches RSS feeds from 21 engineering blogs (with HTML scraping fallback for sites without RSS), and uses a pluggable LLM provider (Anthropic or OpenAI — user's own API key) to filter, rank, and summarize posts based on user interests. All data stays local in SQLite. No cloud, no auth, no hosting.
 
-Reference `brainstorm.md` for architecture decisions and `mvp_plan.md` for implementation phases.
-
 ## Commands
 
 ```bash
