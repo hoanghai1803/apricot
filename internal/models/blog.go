@@ -4,13 +4,16 @@ import "time"
 
 // BlogSource represents an engineering blog we track via RSS.
 type BlogSource struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Company   string    `json:"company"`
-	FeedURL   string    `json:"feed_url"`
-	SiteURL   string    `json:"site_url"`
-	IsActive  bool      `json:"is_active"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          int64      `json:"id"`
+	Name        string     `json:"name"`
+	Company     string     `json:"company"`
+	FeedURL     string     `json:"feed_url"`
+	SiteURL     string     `json:"site_url"`
+	IsActive    bool       `json:"is_active"`
+	LastFetchAt *time.Time `json:"last_fetch_at,omitempty"`
+	LastFetchOK bool       `json:"last_fetch_ok"`
+	LastError   string     `json:"last_error,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // Blog represents an individual blog post discovered from an RSS feed.

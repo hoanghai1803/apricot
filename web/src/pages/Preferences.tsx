@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Save, Loader2, AlertCircle, Info } from 'lucide-react'
+import { Save, Loader2, AlertCircle, Info, Heart, HeartCrack } from 'lucide-react'
 import type { BlogSource, Preferences as PreferencesType } from '@/lib/types'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,16 @@ import { Separator } from '@/components/ui/separator'
 import { Toast } from '@/components/toast'
 
 type FeedMode = 'recent_posts' | 'time_range'
+
+function sourceHealthTooltip(source: BlogSource): string {
+  if (!source.last_fetch_at) return 'No fetch data yet — run a discovery first'
+  const date = new Date(source.last_fetch_at).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  })
+  if (source.last_fetch_ok) return `Healthy — last fetched ${date}`
+  return `Failed — last attempt ${date}\n${source.last_error ?? 'Unknown error'}`
+}
 
 export function Preferences() {
   const [topics, setTopics] = useState('')
@@ -386,9 +396,18 @@ export function Preferences() {
                   className="flex items-center justify-between gap-4 px-4 py-3"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2">
+                    <div className="flex items-center gap-2">
                       <span className="font-medium">{source.company}</span>
                       <span className="text-sm text-muted-foreground">{source.name}</span>
+                      <span title={sourceHealthTooltip(source)} className="cursor-help">
+                        {!source.last_fetch_at ? (
+                          <Heart className="size-3.5 text-muted-foreground/40" />
+                        ) : source.last_fetch_ok ? (
+                          <Heart className="size-3.5 fill-red-500 text-red-500" />
+                        ) : (
+                          <HeartCrack className="size-3.5 text-red-500" />
+                        )}
+                      </span>
                     </div>
                     <p className="mt-1 truncate text-xs text-muted-foreground">
                       {source.feed_url}

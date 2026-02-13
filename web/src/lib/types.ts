@@ -5,6 +5,9 @@ export interface BlogSource {
   feed_url: string
   site_url: string
   is_active: boolean
+  last_fetch_at?: string
+  last_fetch_ok: boolean
+  last_error?: string
   created_at: string
 }
 

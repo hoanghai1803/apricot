@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/hoanghai1803/apricot/internal/models"
@@ -37,7 +38,7 @@ var defaultSources = []models.BlogSource{
 // ordered by name. The sentinel "custom://user-added" source is excluded.
 func (s *Store) GetAllSources(ctx context.Context) ([]models.BlogSource, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, company, feed_url, site_url, is_active, created_at
+		`SELECT id, name, company, feed_url, site_url, is_active, last_fetch_at, last_fetch_ok, last_error, created_at
 		 FROM blog_sources WHERE feed_url != 'custom://user-added' ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("querying all sources: %w", err)
@@ -51,7 +52,7 @@ func (s *Store) GetAllSources(ctx context.Context) ([]models.BlogSource, error) 
 // ordered by name.
 func (s *Store) GetActiveSources(ctx context.Context) ([]models.BlogSource, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, company, feed_url, site_url, is_active, created_at
+		`SELECT id, name, company, feed_url, site_url, is_active, last_fetch_at, last_fetch_ok, last_error, created_at
 		 FROM blog_sources WHERE is_active = 1 ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("querying active sources: %w", err)
@@ -83,6 +84,26 @@ func (s *Store) ToggleSource(ctx context.Context, id int64, active bool) error {
 		return ErrNotFound
 	}
 
+	return nil
+}
+
+// UpdateSourceHealth records the last fetch result for a source.
+func (s *Store) UpdateSourceHealth(ctx context.Context, name string, ok bool, fetchErr string) error {
+	okInt := 0
+	if ok {
+		okInt = 1
+	}
+	var errVal *string
+	if fetchErr != "" {
+		errVal = &fetchErr
+	}
+
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE blog_sources SET last_fetch_at = datetime('now'), last_fetch_ok = ?, last_error = ? WHERE name = ?`,
+		okInt, errVal, name)
+	if err != nil {
+		return fmt.Errorf("updating health for source %q: %w", name, err)
+	}
 	return nil
 }
 
@@ -132,17 +153,28 @@ func scanSources(rows interface {
 	var sources []models.BlogSource
 	for rows.Next() {
 		var (
-			src       models.BlogSource
-			isActive  int
-			createdAt string
+			src         models.BlogSource
+			isActive    int
+			lastFetchAt sql.NullString
+			lastFetchOK int
+			lastError   sql.NullString
+			createdAt   string
 		)
 		if err := rows.Scan(
 			&src.ID, &src.Name, &src.Company, &src.FeedURL,
-			&src.SiteURL, &isActive, &createdAt,
+			&src.SiteURL, &isActive, &lastFetchAt, &lastFetchOK, &lastError, &createdAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning source row: %w", err)
 		}
 		src.IsActive = isActive == 1
+		src.LastFetchOK = lastFetchOK == 1
+		if lastFetchAt.Valid {
+			t := parseTime(lastFetchAt.String)
+			src.LastFetchAt = &t
+		}
+		if lastError.Valid {
+			src.LastError = lastError.String
+		}
 		src.CreatedAt = parseTime(createdAt)
 		sources = append(sources, src)
 	}

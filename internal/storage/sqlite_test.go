@@ -145,8 +145,8 @@ func TestRunMigrations_Idempotent(t *testing.T) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("counting migrations: %v", err)
 	}
-	if count != 5 {
-		t.Fatalf("expected 5 migration records, got %d", count)
+	if count != 6 {
+		t.Fatalf("expected 6 migration records, got %d", count)
 	}
 }
 

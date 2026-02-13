@@ -111,6 +111,19 @@ func Discover(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fet
 
 		slog.Info("fetched blogs", "count", len(blogs), "failed", len(failedFeeds))
 
+		// Record source health for all sources.
+		failedNames := make(map[string]string, len(failedFeeds))
+		for _, ff := range failedFeeds {
+			failedNames[ff.Source] = ff.Error
+		}
+		for _, src := range sources {
+			if errMsg, failed := failedNames[src.Name]; failed {
+				_ = store.UpdateSourceHealth(ctx, src.Name, false, errMsg)
+			} else {
+				_ = store.UpdateSourceHealth(ctx, src.Name, true, "")
+			}
+		}
+
 		if len(blogs) == 0 {
 			resp := DiscoverResponse{
 				Results:     []DiscoverResult{},
