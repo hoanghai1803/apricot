@@ -22,6 +22,7 @@ export interface Blog {
   published_at?: string
   fetched_at: string
   content_hash?: string
+  reading_time_minutes?: number
   created_at: string
 }
 
@@ -31,6 +32,7 @@ export interface ReadingListItem {
   blog?: Blog
   summary?: string
   status: 'unread' | 'reading' | 'read'
+  progress: number
   notes?: string
   tags: string[]
   added_at: string
@@ -43,6 +45,7 @@ export interface DiscoverResult {
   url: string
   source: string
   published_at?: string
+  reading_time_minutes?: number
   summary: string
   reason: string
 }

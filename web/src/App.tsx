@@ -3,6 +3,7 @@ import { Layout } from '@/components/layout'
 import { Home } from '@/pages/Home'
 import { Preferences } from '@/pages/Preferences'
 import { ReadingList } from '@/pages/ReadingList'
+import { ReaderView } from '@/pages/ReaderView'
 
 const router = createBrowserRouter([
   {
@@ -13,6 +14,7 @@ const router = createBrowserRouter([
       { path: '/reading-list', element: <ReadingList /> },
     ],
   },
+  { path: '/read/:id', element: <ReaderView /> },
 ])
 
 export default function App() {

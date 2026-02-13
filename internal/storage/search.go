@@ -23,7 +23,7 @@ func (s *Store) SearchBlogs(ctx context.Context, query string, limit int) ([]mod
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT b.id, b.source_id, COALESCE(b.custom_source, bs.name, '') AS source,
 				b.title, b.url, b.description, b.full_content,
-				b.published_at, b.fetched_at, b.content_hash, b.created_at
+				b.published_at, b.fetched_at, b.content_hash, b.reading_time_minutes, b.created_at
 		 FROM blogs_fts fts
 		 JOIN blogs b ON b.id = fts.rowid
 		 LEFT JOIN blog_sources bs ON bs.id = b.source_id
@@ -40,13 +40,14 @@ func (s *Store) SearchBlogs(ctx context.Context, query string, limit int) ([]mod
 	var blogs []models.Blog
 	for rows.Next() {
 		var (
-			blog        models.Blog
-			description sql.NullString
-			fullContent sql.NullString
-			publishedAt sql.NullString
-			fetchedAt   string
-			contentHash sql.NullString
-			createdAt   string
+			blog           models.Blog
+			description    sql.NullString
+			fullContent    sql.NullString
+			publishedAt    sql.NullString
+			fetchedAt      string
+			contentHash    sql.NullString
+			readingTimeMin sql.NullInt64
+			createdAt      string
 		)
 
 		if err := rows.Scan(
@@ -54,7 +55,7 @@ func (s *Store) SearchBlogs(ctx context.Context, query string, limit int) ([]mod
 			&blog.Title, &blog.URL,
 			&description, &fullContent,
 			&publishedAt, &fetchedAt,
-			&contentHash, &createdAt,
+			&contentHash, &readingTimeMin, &createdAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning search result: %w", err)
 		}
@@ -62,6 +63,10 @@ func (s *Store) SearchBlogs(ctx context.Context, query string, limit int) ([]mod
 		blog.Description = description.String
 		blog.FullContent = fullContent.String
 		blog.ContentHash = contentHash.String
+		if readingTimeMin.Valid {
+			v := int(readingTimeMin.Int64)
+			blog.ReadingTimeMinutes = &v
+		}
 		blog.PublishedAt = parseTimePtr(nullStringToPtr(publishedAt))
 		blog.FetchedAt = parseTime(fetchedAt)
 		blog.CreatedAt = parseTime(createdAt)

@@ -8,8 +8,9 @@ type ReadingListItem struct {
 	BlogID  int64      `json:"blog_id"`
 	Blog    *Blog      `json:"blog,omitempty"`
 	Summary *string    `json:"summary,omitempty"`
-	Status  string     `json:"status"`
-	Notes   *string    `json:"notes,omitempty"`
+	Status   string     `json:"status"`
+	Progress int        `json:"progress"`
+	Notes    *string    `json:"notes,omitempty"`
 	Tags    []string   `json:"tags"`
 	AddedAt time.Time  `json:"added_at"`
 	ReadAt  *time.Time `json:"read_at,omitempty"`

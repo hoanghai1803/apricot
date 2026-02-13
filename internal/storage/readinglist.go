@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -42,10 +43,10 @@ func (s *Store) AddToReadingList(ctx context.Context, blogID int64) error {
 // by added_at DESC.
 func (s *Store) GetReadingList(ctx context.Context, status string) ([]models.ReadingListItem, error) {
 	query := `
-		SELECT rl.id, rl.blog_id, rl.status, rl.notes, rl.added_at, rl.read_at,
+		SELECT rl.id, rl.blog_id, rl.status, rl.progress, rl.notes, rl.added_at, rl.read_at,
 			   b.id, b.source_id, COALESCE(b.custom_source, bs.name, '') AS source, b.title, b.url,
 			   b.description, b.full_content, b.published_at, b.fetched_at,
-			   b.content_hash, b.created_at,
+			   b.content_hash, b.reading_time_minutes, b.created_at,
 			   s.summary
 		FROM reading_list rl
 		JOIN blogs b ON b.id = rl.blog_id
@@ -68,25 +69,26 @@ func (s *Store) GetReadingList(ctx context.Context, status string) ([]models.Rea
 	var items []models.ReadingListItem
 	for rows.Next() {
 		var (
-			item        models.ReadingListItem
-			notes       sql.NullString
-			addedAt     string
-			readAt      sql.NullString
-			blog        models.Blog
-			description sql.NullString
-			fullContent sql.NullString
-			publishedAt sql.NullString
-			fetchedAt   string
-			contentHash sql.NullString
-			blogCreated string
-			summary     sql.NullString
+			item           models.ReadingListItem
+			notes          sql.NullString
+			addedAt        string
+			readAt         sql.NullString
+			blog           models.Blog
+			description    sql.NullString
+			fullContent    sql.NullString
+			publishedAt    sql.NullString
+			fetchedAt      string
+			contentHash    sql.NullString
+			readingTimeMin sql.NullInt64
+			blogCreated    string
+			summary        sql.NullString
 		)
 
 		if err := rows.Scan(
-			&item.ID, &item.BlogID, &item.Status, &notes, &addedAt, &readAt,
+			&item.ID, &item.BlogID, &item.Status, &item.Progress, &notes, &addedAt, &readAt,
 			&blog.ID, &blog.SourceID, &blog.Source, &blog.Title, &blog.URL,
 			&description, &fullContent, &publishedAt, &fetchedAt,
-			&contentHash, &blogCreated,
+			&contentHash, &readingTimeMin, &blogCreated,
 			&summary,
 		); err != nil {
 			return nil, fmt.Errorf("scanning reading list row: %w", err)
@@ -101,6 +103,10 @@ func (s *Store) GetReadingList(ctx context.Context, status string) ([]models.Rea
 		blog.Description = description.String
 		blog.FullContent = fullContent.String
 		blog.ContentHash = contentHash.String
+		if readingTimeMin.Valid {
+			v := int(readingTimeMin.Int64)
+			blog.ReadingTimeMinutes = &v
+		}
 		blog.PublishedAt = parseTimePtr(nullStringToPtr(publishedAt))
 		blog.FetchedAt = parseTime(fetchedAt)
 		blog.CreatedAt = parseTime(blogCreated)
@@ -161,6 +167,102 @@ func (s *Store) UpdateReadingListNotes(ctx context.Context, id int64, notes stri
 	)
 	if err != nil {
 		return fmt.Errorf("updating reading list notes: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// GetReadingListItemByID returns a single reading list item with its blog and
+// summary data. Returns ErrNotFound if the item does not exist.
+func (s *Store) GetReadingListItemByID(ctx context.Context, id int64) (*models.ReadingListItem, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT rl.id, rl.blog_id, rl.status, rl.progress, rl.notes, rl.added_at, rl.read_at,
+			   b.id, b.source_id, COALESCE(b.custom_source, bs.name, '') AS source, b.title, b.url,
+			   b.description, b.full_content, b.published_at, b.fetched_at,
+			   b.content_hash, b.reading_time_minutes, b.created_at,
+			   s.summary
+		FROM reading_list rl
+		JOIN blogs b ON b.id = rl.blog_id
+		LEFT JOIN blog_sources bs ON bs.id = b.source_id
+		LEFT JOIN blog_summaries s ON s.blog_id = rl.blog_id
+		WHERE rl.id = ?`, id)
+
+	var (
+		item           models.ReadingListItem
+		notes          sql.NullString
+		addedAt        string
+		readAt         sql.NullString
+		blog           models.Blog
+		description    sql.NullString
+		fullContent    sql.NullString
+		publishedAt    sql.NullString
+		fetchedAt      string
+		contentHash    sql.NullString
+		readingTimeMin sql.NullInt64
+		blogCreated    string
+		summary        sql.NullString
+	)
+
+	if err := row.Scan(
+		&item.ID, &item.BlogID, &item.Status, &item.Progress, &notes, &addedAt, &readAt,
+		&blog.ID, &blog.SourceID, &blog.Source, &blog.Title, &blog.URL,
+		&description, &fullContent, &publishedAt, &fetchedAt,
+		&contentHash, &readingTimeMin, &blogCreated,
+		&summary,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("getting reading list item: %w", err)
+	}
+
+	if notes.Valid {
+		item.Notes = &notes.String
+	}
+	item.AddedAt = parseTime(addedAt)
+	item.ReadAt = parseTimePtr(nullStringToPtr(readAt))
+
+	blog.Description = description.String
+	blog.FullContent = fullContent.String
+	blog.ContentHash = contentHash.String
+	if readingTimeMin.Valid {
+		v := int(readingTimeMin.Int64)
+		blog.ReadingTimeMinutes = &v
+	}
+	blog.PublishedAt = parseTimePtr(nullStringToPtr(publishedAt))
+	blog.FetchedAt = parseTime(fetchedAt)
+	blog.CreatedAt = parseTime(blogCreated)
+	item.Blog = &blog
+
+	if summary.Valid {
+		item.Summary = &summary.String
+	}
+
+	item.Tags = []string{}
+	items := []models.ReadingListItem{item}
+	if err := s.loadTagsForItems(ctx, items); err != nil {
+		return nil, fmt.Errorf("loading tags: %w", err)
+	}
+
+	return &items[0], nil
+}
+
+// UpdateReadingListProgress updates the scroll progress (0-100) of a reading
+// list item.
+func (s *Store) UpdateReadingListProgress(ctx context.Context, id int64, progress int) error {
+	if progress < 0 || progress > 100 {
+		return fmt.Errorf("progress must be between 0 and 100, got %d", progress)
+	}
+
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE reading_list SET progress = ? WHERE id = ?`,
+		progress, id,
+	)
+	if err != nil {
+		return fmt.Errorf("updating reading list progress: %w", err)
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {

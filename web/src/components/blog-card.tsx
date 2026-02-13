@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { ExternalLink, BookmarkPlus, BookmarkCheck } from 'lucide-react'
+import { ExternalLink, BookmarkPlus, BookmarkCheck, Clock } from 'lucide-react'
 import type { DiscoverResult } from '@/lib/types'
+import { formatReadingTime } from '@/lib/reading'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -24,29 +25,29 @@ function formatDate(dateStr?: string): string {
 
 export function BlogCard({ blog, onAddToReadingList, isAdded = false }: BlogCardProps) {
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const readingTime = formatReadingTime(blog.reading_time_minutes)
 
   return (
     <>
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
-            <Badge variant="secondary">{blog.source}</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{blog.source}</Badge>
+              {readingTime && (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Clock className="size-3" />
+                  {readingTime}
+                </span>
+              )}
+            </div>
             {blog.published_at && (
               <span className="text-xs text-muted-foreground">
                 {formatDate(blog.published_at)}
               </span>
             )}
           </div>
-          <CardTitle>
-            <a
-              href={blog.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-primary hover:underline underline-offset-2 transition-colors"
-            >
-              {blog.title}
-            </a>
-          </CardTitle>
+          <CardTitle>{blog.title}</CardTitle>
           <CardDescription className="sr-only">
             From {blog.source}
           </CardDescription>

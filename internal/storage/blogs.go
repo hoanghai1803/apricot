@@ -51,7 +51,7 @@ func (s *Store) GetBlogByURL(ctx context.Context, url string) (*models.Blog, err
 	row := s.db.QueryRowContext(ctx,
 		`SELECT b.id, b.source_id, COALESCE(b.custom_source, bs.name, '') AS source, b.title, b.url,
 				b.description, b.full_content, b.published_at, b.fetched_at,
-				b.content_hash, b.created_at
+				b.content_hash, b.reading_time_minutes, b.created_at
 		 FROM blogs b
 		 LEFT JOIN blog_sources bs ON bs.id = b.source_id
 		 WHERE b.url = ?`, url)
@@ -72,7 +72,7 @@ func (s *Store) GetBlogByID(ctx context.Context, id int64) (*models.Blog, error)
 	row := s.db.QueryRowContext(ctx,
 		`SELECT b.id, b.source_id, COALESCE(b.custom_source, bs.name, '') AS source, b.title, b.url,
 				b.description, b.full_content, b.published_at, b.fetched_at,
-				b.content_hash, b.created_at
+				b.content_hash, b.reading_time_minutes, b.created_at
 		 FROM blogs b
 		 LEFT JOIN blog_sources bs ON bs.id = b.source_id
 		 WHERE b.id = ?`, id)
@@ -176,19 +176,20 @@ type scanner interface {
 // scanBlog scans a single blog row into a models.Blog.
 func scanBlog(row scanner) (*models.Blog, error) {
 	var (
-		blog        models.Blog
-		description sql.NullString
-		fullContent sql.NullString
-		publishedAt sql.NullString
-		fetchedAt   string
-		contentHash sql.NullString
-		createdAt   string
+		blog             models.Blog
+		description      sql.NullString
+		fullContent      sql.NullString
+		publishedAt      sql.NullString
+		fetchedAt        string
+		contentHash      sql.NullString
+		readingTimeMin   sql.NullInt64
+		createdAt        string
 	)
 
 	if err := row.Scan(
 		&blog.ID, &blog.SourceID, &blog.Source, &blog.Title, &blog.URL,
 		&description, &fullContent, &publishedAt, &fetchedAt,
-		&contentHash, &createdAt,
+		&contentHash, &readingTimeMin, &createdAt,
 	); err != nil {
 		return nil, err
 	}
@@ -196,6 +197,10 @@ func scanBlog(row scanner) (*models.Blog, error) {
 	blog.Description = description.String
 	blog.FullContent = fullContent.String
 	blog.ContentHash = contentHash.String
+	if readingTimeMin.Valid {
+		v := int(readingTimeMin.Int64)
+		blog.ReadingTimeMinutes = &v
+	}
 	blog.PublishedAt = parseTimePtr(nullStringToPtr(publishedAt))
 	blog.FetchedAt = parseTime(fetchedAt)
 	blog.CreatedAt = parseTime(createdAt)
@@ -209,6 +214,22 @@ func nullableString(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// UpdateReadingTime sets the reading_time_minutes for a blog post.
+func (s *Store) UpdateReadingTime(ctx context.Context, blogID int64, minutes int) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE blogs SET reading_time_minutes = ? WHERE id = ?`,
+		minutes, blogID,
+	)
+	if err != nil {
+		return fmt.Errorf("updating reading time: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // nullStringToPtr converts a sql.NullString to a *string.

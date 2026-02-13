@@ -27,8 +27,9 @@ type Blog struct {
 	FullContent string     `json:"full_content,omitempty"`
 	PublishedAt *time.Time `json:"published_at,omitempty"`
 	FetchedAt   time.Time  `json:"fetched_at"`
-	ContentHash string     `json:"content_hash,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ContentHash        string     `json:"content_hash,omitempty"`
+	ReadingTimeMinutes *int       `json:"reading_time_minutes,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
 }
 
 // BlogSummary holds a cached AI-generated summary for a blog post.

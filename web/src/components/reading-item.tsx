@@ -1,7 +1,9 @@
 import { useState, useRef } from 'react'
-import { ExternalLink, BookOpen, CheckCircle, RotateCcw, Trash2, Plus, X, Tag } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { ExternalLink, BookOpen, CheckCircle, RotateCcw, Trash2, Plus, X, Tag, Clock } from 'lucide-react'
 import type { ReadingListItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { formatReadingTime } from '@/lib/reading'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -27,7 +29,7 @@ function formatDate(dateStr: string): string {
 
 const statusLabels: Record<string, { action: string; description: string }> = {
   reading: {
-    action: 'Start Reading',
+    action: 'Move to Reading',
     description: 'Move this post to your "Reading" list?',
   },
   read: {
@@ -41,6 +43,7 @@ const statusLabels: Record<string, { action: string; description: string }> = {
 }
 
 export function ReadingItem({ item, onStatusChange, onRemove, onTagsChange, allTags }: ReadingItemProps) {
+  const navigate = useNavigate()
   const [statusConfirm, setStatusConfirm] = useState<string | null>(null)
   const [removeConfirm, setRemoveConfirm] = useState(false)
   const [showTagInput, setShowTagInput] = useState(false)
@@ -51,6 +54,7 @@ export function ReadingItem({ item, onStatusChange, onRemove, onTagsChange, allT
   const title = item.blog?.title ?? `Blog #${item.blog_id}`
   const url = item.blog?.url
   const source = item.blog?.source
+  const readingTime = formatReadingTime(item.blog?.reading_time_minutes)
 
   const confirmInfo = statusConfirm ? statusLabels[statusConfirm] : null
 
@@ -122,25 +126,18 @@ export function ReadingItem({ item, onStatusChange, onRemove, onTagsChange, allT
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               {source && <Badge variant="secondary">{source}</Badge>}
+              {readingTime && (
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Clock className="size-3" />
+                  {readingTime}
+                </span>
+              )}
             </div>
             <span className="text-xs text-muted-foreground">
               Added {formatDate(item.added_at)}
             </span>
           </div>
-          <CardTitle>
-            {url ? (
-              <a
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-primary hover:underline underline-offset-2 transition-colors"
-              >
-                {title}
-              </a>
-            ) : (
-              title
-            )}
-          </CardTitle>
+          <CardTitle>{title}</CardTitle>
         </CardHeader>
 
         {item.summary && (
@@ -228,13 +225,17 @@ export function ReadingItem({ item, onStatusChange, onRemove, onTagsChange, allT
 
         <CardFooter className="flex-wrap gap-2">
           {item.status === 'unread' && (
-            <Button variant="outline" size="sm" onClick={() => setStatusConfirm('reading')}>
+            <Button variant="outline" size="sm" onClick={() => navigate(`/read/${item.id}`)}>
               <BookOpen className="size-4" />
               Start Reading
             </Button>
           )}
           {item.status === 'reading' && (
             <>
+              <Button variant="outline" size="sm" onClick={() => navigate(`/read/${item.id}`)}>
+                <BookOpen className="size-4" />
+                Continue Reading
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setStatusConfirm('read')}>
                 <CheckCircle className="size-4" />
                 Mark as Read
@@ -246,9 +247,9 @@ export function ReadingItem({ item, onStatusChange, onRemove, onTagsChange, allT
             </>
           )}
           {item.status === 'read' && (
-            <Button variant="outline" size="sm" onClick={() => setStatusConfirm('unread')}>
+            <Button variant="outline" size="sm" onClick={() => setStatusConfirm('reading')}>
               <RotateCcw className="size-4" />
-              Back to Unread
+              Back to Reading
             </Button>
           )}
 

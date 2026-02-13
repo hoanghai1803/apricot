@@ -33,6 +33,20 @@ func GetReadingList(store *storage.Store) http.HandlerFunc {
 			items = []models.ReadingListItem{}
 		}
 
+		// Calculate and cache reading time for items that don't have it yet.
+		for i := range items {
+			blog := items[i].Blog
+			if blog != nil && blog.ReadingTimeMinutes == nil && blog.FullContent != "" {
+				minutes := feeds.CalculateReadingTime(blog.FullContent)
+				if minutes > 0 {
+					if err := store.UpdateReadingTime(ctx, blog.ID, minutes); err != nil {
+						slog.Warn("failed to cache reading time", "blog_id", blog.ID, "error", err)
+					}
+					items[i].Blog.ReadingTimeMinutes = &minutes
+				}
+			}
+		}
+
 		writeJSON(w, http.StatusOK, items)
 	}
 }
@@ -138,6 +152,112 @@ func DeleteReadingListItem(store *storage.Store) http.HandlerFunc {
 		}
 
 		writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
+	}
+}
+
+// GetReadingListItem handles GET /api/reading-list/{id}. It returns a single
+// reading list item with full blog content. On first access, it calculates and
+// caches the reading time.
+func GetReadingListItem(store *storage.Store, fetcher *feeds.Fetcher) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		id, err := parseID(r, "id")
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		item, err := store.GetReadingListItemByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "Reading list item not found")
+				return
+			}
+			slog.Error("failed to get reading list item", "id", id, "error", err)
+			writeError(w, http.StatusInternalServerError, "Failed to get reading list item")
+			return
+		}
+
+		// Try to extract content if missing (some sites fail during discovery
+		// due to transient errors — retrying here may succeed).
+		if item.Blog != nil && item.Blog.FullContent == "" && item.Blog.URL != "" {
+			slog.Info("attempting on-demand content extraction", "url", item.Blog.URL)
+			content, err := fetcher.ExtractArticle(ctx, item.Blog.URL)
+			if err != nil {
+				slog.Debug("on-demand extraction failed", "url", item.Blog.URL, "error", err)
+			} else if content != "" {
+				item.Blog.FullContent = content
+				if _, err := store.UpsertBlog(ctx, item.Blog); err != nil {
+					slog.Warn("failed to save extracted content", "blog_id", item.Blog.ID, "error", err)
+				}
+			}
+		}
+
+		// Calculate and cache reading time on first access.
+		if item.Blog != nil && item.Blog.ReadingTimeMinutes == nil && item.Blog.FullContent != "" {
+			minutes := feeds.CalculateReadingTime(item.Blog.FullContent)
+			if minutes > 0 {
+				if err := store.UpdateReadingTime(ctx, item.Blog.ID, minutes); err != nil {
+					slog.Warn("failed to cache reading time", "blog_id", item.Blog.ID, "error", err)
+				}
+				item.Blog.ReadingTimeMinutes = &minutes
+			}
+		}
+
+		writeJSON(w, http.StatusOK, item)
+	}
+}
+
+// UpdateReadingProgress handles PATCH /api/reading-list/{id}/progress.
+// It updates the scroll progress (0-100) and auto-marks as "read" at >= 90%.
+func UpdateReadingProgress(store *storage.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		id, err := parseID(r, "id")
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		var body struct {
+			Progress int `json:"progress"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, "Invalid JSON body")
+			return
+		}
+
+		if body.Progress < 0 || body.Progress > 100 {
+			writeError(w, http.StatusBadRequest, "progress must be between 0 and 100")
+			return
+		}
+
+		if err := store.UpdateReadingListProgress(ctx, id, body.Progress); err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "Reading list item not found")
+				return
+			}
+			slog.Error("failed to update reading progress", "id", id, "error", err)
+			writeError(w, http.StatusInternalServerError, "Failed to update progress")
+			return
+		}
+
+		// Auto-mark as "read" when progress >= 90%.
+		autoRead := false
+		if body.Progress >= 90 {
+			if err := store.UpdateReadingListStatus(ctx, id, "read"); err != nil {
+				slog.Warn("failed to auto-mark as read", "id", id, "error", err)
+			} else {
+				autoRead = true
+			}
+		}
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status":    "updated",
+			"auto_read": autoRead,
+		})
 	}
 }
 

@@ -37,7 +37,9 @@ func NewRouter(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fe
 		api.Get("/reading-list", handlers.GetReadingList(store))
 		api.Post("/reading-list", handlers.AddToReadingList(store))
 		api.Post("/reading-list/custom", handlers.AddCustomBlog(store, fetcher, aiProvider, cfg))
+		api.Get("/reading-list/{id}", handlers.GetReadingListItem(store, fetcher))
 		api.Patch("/reading-list/{id}", handlers.UpdateReadingListItem(store))
+		api.Patch("/reading-list/{id}/progress", handlers.UpdateReadingProgress(store))
 		api.Delete("/reading-list/{id}", handlers.DeleteReadingListItem(store))
 		api.Post("/reading-list/{id}/tags", handlers.AddTagToItem(store))
 		api.Delete("/reading-list/{id}/tags/{tag}", handlers.RemoveTagFromItem(store))
@@ -47,6 +49,8 @@ func NewRouter(store *storage.Store, aiProvider ai.AIProvider, fetcher *feeds.Fe
 
 		api.Get("/sources", handlers.GetSources(store))
 		api.Put("/sources/{id}", handlers.ToggleSource(store))
+
+		api.Get("/proxy", handlers.ProxyPage())
 	})
 
 	// Serve React SPA from the embedded dist/ directory.
