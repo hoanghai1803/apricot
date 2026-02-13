@@ -263,7 +263,7 @@ export function Preferences() {
           <div className="overflow-hidden rounded-lg border">
             <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-3">
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium">All sources</span>
+                <span className="text-sm font-semibold">All sources</span>
                 <span className="text-xs tabular-nums text-muted-foreground">
                   {selectedSources.size} of {sources.length}
                 </span>
@@ -278,11 +278,13 @@ export function Preferences() {
                   }
                 }}
                 aria-label="Toggle all sources"
-                className={
+                className={`scale-125 origin-right ${
                   selectedSources.size > 0 && selectedSources.size < sources.length
                     ? 'data-[state=unchecked]:bg-primary/40'
-                    : ''
-                }
+                    : selectedSources.size === sources.length
+                      ? 'data-[state=checked]:bg-emerald-500'
+                      : ''
+                }`}
               />
             </div>
 
