@@ -29,14 +29,15 @@ Go binary (single process)
 ├── cmd/server/main.go          — Entry point: config, DB, router, auto-open browser
 ├── internal/config/            — TOML config parsing, defaults, env var overrides
 ├── internal/models/            — Shared domain types (Blog, BlogSource, ReadingListItem, etc.)
-├── internal/storage/           — SQLite layer: migrations (V1-V3), CRUD for all tables
+├── internal/storage/           — SQLite layer: CRUD for all tables
+│   └── migrations/            — Embedded SQL migration files (go:embed, auto-applied on startup)
 ├── internal/feeds/             — RSS fetching (gofeed, parallel), HTML scraping (LinkedIn), content extraction
 ├── internal/ai/                — AIProvider interface + Anthropic/OpenAI implementations
 │   └── skills.go               — Shared prompt templates (filter & rank, summarize)
 ├── internal/api/               — chi router, middleware, embedded SPA serving
 │   ├── handlers/               — JSON API handlers (discover, preferences, reading list, sources)
 │   └── dist/                   — Embedded React build output (go:embed)
-├── migrations/                 — SQL migration files (V1: schema, V2: source updates, V3: session results)
+├── (migrations are in internal/storage/migrations/ — embedded via go:embed)
 └── web/                        — React SPA (Vite + TypeScript + shadcn/ui + Tailwind)
     └── src/
         ├── pages/              — Home (discovery), Preferences, ReadingList

@@ -7,11 +7,14 @@ package storage
 
 import (
 	"database/sql"
+	"embed"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite" // Pure Go SQLite driver.
@@ -73,98 +76,13 @@ func OpenDatabase(path string) (*sql.DB, error) {
 	return db, nil
 }
 
-// migration defines a single schema migration with a version number and SQL.
-type migration struct {
-	Version int
-	SQL     string
-}
-
-// migrations is the ordered list of all schema migrations. Migrations are
-// stored as Go constants (rather than embedded files) for simplicity and to
-// avoid go:embed path limitations. The corresponding SQL is also maintained
-// in migrations/*.sql for documentation.
-var migrations = []migration{
-	{Version: 1, SQL: migrationV1},
-	{Version: 2, SQL: migrationV2},
-	{Version: 3, SQL: migrationV3},
-}
-
-const migrationV1 = `
--- Blog sources (the engineering blogs we track)
-CREATE TABLE blog_sources (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    name        TEXT NOT NULL,
-    company     TEXT NOT NULL,
-    feed_url    TEXT NOT NULL UNIQUE,
-    site_url    TEXT NOT NULL,
-    is_active   INTEGER NOT NULL DEFAULT 1,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- Individual blog posts discovered from RSS feeds
-CREATE TABLE blogs (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    source_id       INTEGER NOT NULL REFERENCES blog_sources(id),
-    title           TEXT NOT NULL,
-    url             TEXT NOT NULL UNIQUE,
-    description     TEXT,
-    full_content    TEXT,
-    published_at    TEXT,
-    fetched_at      TEXT NOT NULL DEFAULT (datetime('now')),
-    content_hash    TEXT,
-    created_at      TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE INDEX idx_blogs_published ON blogs(published_at DESC);
-CREATE INDEX idx_blogs_source ON blogs(source_id);
-CREATE INDEX idx_blogs_url ON blogs(url);
-
--- Cached AI-generated summaries
-CREATE TABLE blog_summaries (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    blog_id     INTEGER NOT NULL UNIQUE REFERENCES blogs(id),
-    summary     TEXT NOT NULL,
-    model_used  TEXT NOT NULL,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- User preferences (single user, so no user_id needed)
-CREATE TABLE preferences (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    key         TEXT NOT NULL UNIQUE,
-    value       TEXT NOT NULL,
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- Reading list / wishlist
-CREATE TABLE reading_list (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    blog_id     INTEGER NOT NULL UNIQUE REFERENCES blogs(id),
-    status      TEXT NOT NULL DEFAULT 'unread',
-    notes       TEXT,
-    added_at    TEXT NOT NULL DEFAULT (datetime('now')),
-    read_at     TEXT
-);
-
-CREATE INDEX idx_reading_status ON reading_list(status);
-
--- Discovery sessions (audit trail of each discovery run)
-CREATE TABLE discovery_sessions (
-    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-    preferences_snapshot TEXT NOT NULL,
-    blogs_considered     INTEGER NOT NULL,
-    blogs_selected       TEXT NOT NULL,
-    model_used           TEXT NOT NULL,
-    input_tokens         INTEGER,
-    output_tokens        INTEGER,
-    created_at           TEXT NOT NULL DEFAULT (datetime('now'))
-);
-`
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 // RunMigrations applies any unapplied schema migrations to the database.
-// It first ensures the schema_migrations tracking table exists, then applies
-// each migration whose version has not yet been recorded. Each migration
-// runs inside its own transaction for atomicity.
+// Migration SQL files are read from the embedded migrations/ directory.
+// Each file must be named NNN_description.sql where NNN is the version number.
+// Each migration runs inside its own transaction for atomicity.
 func RunMigrations(db *sql.DB) error {
 	// Ensure the tracking table exists.
 	const createTracker = `
@@ -183,26 +101,65 @@ func RunMigrations(db *sql.DB) error {
 		return fmt.Errorf("reading applied migrations: %w", err)
 	}
 
-	// Sort migrations by version to guarantee ordering.
-	sorted := make([]migration, len(migrations))
-	copy(sorted, migrations)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Version < sorted[j].Version
+	// Read migration files from the embedded filesystem.
+	entries, err := migrationsFS.ReadDir("migrations")
+	if err != nil {
+		return fmt.Errorf("reading migrations directory: %w", err)
+	}
+
+	// Parse and sort migration files by version number.
+	type migrationFile struct {
+		version  int
+		filename string
+	}
+	var files []migrationFile
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+			continue
+		}
+		version := parseVersion(entry.Name())
+		if version <= 0 {
+			continue
+		}
+		files = append(files, migrationFile{version: version, filename: entry.Name()})
+	}
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].version < files[j].version
 	})
 
-	for _, m := range sorted {
-		if applied[m.Version] {
+	// Apply each unapplied migration.
+	for _, mf := range files {
+		if applied[mf.version] {
 			continue
 		}
 
-		if err := applyMigration(db, m); err != nil {
-			return fmt.Errorf("applying migration v%d: %w", m.Version, err)
+		sqlBytes, err := migrationsFS.ReadFile("migrations/" + mf.filename)
+		if err != nil {
+			return fmt.Errorf("reading migration file %q: %w", mf.filename, err)
 		}
 
-		slog.Info("applied migration", "version", m.Version)
+		if err := applyMigration(db, mf.version, string(sqlBytes)); err != nil {
+			return fmt.Errorf("applying migration %s: %w", mf.filename, err)
+		}
+
+		slog.Info("applied migration", "version", mf.version, "file", mf.filename)
 	}
 
 	return nil
+}
+
+// parseVersion extracts the version number from a migration filename like
+// "001_initial_schema.sql" → 1, "002_update_sources.sql" → 2.
+func parseVersion(filename string) int {
+	parts := strings.SplitN(filename, "_", 2)
+	if len(parts) == 0 {
+		return 0
+	}
+	v, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0
+	}
+	return v
 }
 
 // appliedVersions returns a set of migration versions that have already been
@@ -232,19 +189,19 @@ func appliedVersions(db *sql.DB) (map[int]bool, error) {
 
 // applyMigration executes a single migration's SQL and records its version,
 // all within a single transaction.
-func applyMigration(db *sql.DB, m migration) error {
+func applyMigration(db *sql.DB, version int, sql string) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
 	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
-	if _, err := tx.Exec(m.SQL); err != nil {
+	if _, err := tx.Exec(sql); err != nil {
 		return fmt.Errorf("executing migration SQL: %w", err)
 	}
 
 	if _, err := tx.Exec(
-		"INSERT INTO schema_migrations (version) VALUES (?)", m.Version,
+		"INSERT INTO schema_migrations (version) VALUES (?)", version,
 	); err != nil {
 		return fmt.Errorf("recording migration version: %w", err)
 	}
@@ -273,22 +230,6 @@ func parseTime(s string) time.Time {
 }
 
 // parseTimePtr is like parseTime but returns nil for empty strings.
-const migrationV2 = `
--- Remove broken blog sources. New replacements are added via SeedDefaults.
-DELETE FROM blog_sources WHERE feed_url IN (
-    'https://cloud.google.com/feeds/cloudblog-google-cloud.xml',
-    'https://shopifyengineering.myshopify.com/blogs/engineering.atom',
-    'https://engineering.linkedin.com/blog.rss.html',
-    'https://doordash.engineering/feed/',
-    'https://blog.x.com/engineering/en_us/blog.rss'
-);
-`
-
-const migrationV3 = `
-ALTER TABLE discovery_sessions ADD COLUMN results_json TEXT;
-ALTER TABLE discovery_sessions ADD COLUMN failed_feeds_json TEXT;
-`
-
 func parseTimePtr(s *string) *time.Time {
 	if s == nil || *s == "" {
 		return nil

@@ -136,11 +136,11 @@ cmd/server/          Entry point
 internal/
   config/            TOML config parsing
   models/            Domain types
-  storage/           SQLite layer (migrations, CRUD)
+  storage/           SQLite layer (CRUD)
+    migrations/      SQL migration files (embedded via go:embed)
   feeds/             RSS fetching, HTML scraping, content extraction
   ai/                LLM provider interface & implementations
   api/               HTTP router, handlers, embedded SPA
-migrations/          SQL migration files (V1-V3)
 web/                 React SPA
   src/pages/         Home, Preferences, ReadingList
   src/components/    BlogCard, ReadingItem, ConfirmDialog, Toast, Layout
