@@ -48,14 +48,16 @@ Go binary (single process)
 - **Embedded SPA**: React build output is copied to `internal/api/dist/` and embedded into the Go binary via `go:embed`. The Go server serves static files with `index.html` fallback for client-side routing.
 - **Pluggable AI (strategy pattern)**: `AIProvider` interface in `internal/ai/provider.go` with factory function `NewProvider()`. Anthropic and OpenAI are separate implementations sharing prompt templates from `skills.go`.
 - **Pure Go SQLite**: Uses `modernc.org/sqlite` (no CGO) for clean cross-compilation. Single writer, WAL mode, foreign keys ON.
-- **Two-pass discovery**: Pass 1 uses RSS title/description for AI filtering (cheap). Pass 2 fetches full article text via go-readability only for the top 10 selected posts before summarization.
+- **Two-pass discovery**: Pass 1 uses RSS title/description for AI filtering (cheap). Pass 2 fetches full article text via go-readability only for the top N selected posts before summarization. Max results configurable 5-20 via Preferences.
 - **Dual feed modes**: User-configurable "By Post Count" (N most recent per source) or "By Time Range" (posts within N days). Configurable in Preferences UI.
 - **HTML scraping fallback**: Sources with `scrape://` feed URLs (e.g., LinkedIn Engineering) are fetched via HTML parsing instead of RSS. See `internal/feeds/scraper.go`.
 - **Persistent discovery**: Results are stored in `discovery_sessions` and restored on page reload via `GET /api/discover/latest`, avoiding redundant AI API calls.
+- **Resilient HTTP client**: Custom transport with 20s TLS handshake timeout, browser-like User-Agent, retry with exponential backoff (2 attempts) for feed fetches. Extractor uses shared HTTP client via `readability.FromReader` instead of `readability.FromURL`.
+- **Data router**: Frontend uses `createBrowserRouter` + `RouterProvider` (react-router-dom v7) to enable `useBlocker` for navigation warnings during discovery.
 
 ### Data Flow: "Collect Fancy Blogs"
 
-`POST /api/discover` → load preferences + feed settings → fetch RSS/scrape feeds (parallel) → AI filter & rank → extract full content for top 10 → AI summarize each → cache in SQLite → persist session → return JSON with results + failed feeds
+`POST /api/discover` → load preferences + feed settings → fetch RSS/scrape feeds (parallel, with retry) → AI filter & rank (configurable max results) → extract full content for top N → AI summarize each → cache in SQLite → persist session → return JSON with results + failed feeds
 
 ### API Routes
 
@@ -65,6 +67,10 @@ All under `/api/*` return JSON. Non-API GET requests serve the React SPA.
 - `GET /api/discover/latest` — return most recent discovery session results
 - `GET/PUT /api/preferences` — user preferences (topics, feed mode, selected sources)
 - `GET/POST/PATCH/DELETE /api/reading-list` — reading list CRUD
+- `POST /api/reading-list/custom` — add any URL to reading list (extracts metadata + AI summary)
+- `POST/DELETE /api/reading-list/{id}/tags`, `DELETE .../tags/{tag}` — tag management
+- `GET /api/tags` — list all tags
+- `GET /api/search?q=...` — full-text blog search
 - `GET /api/sources`, `PUT /api/sources/{id}` — blog source management
 
 ## Configuration

@@ -23,9 +23,12 @@ make run
 ## Features
 
 - **Curated feeds** — Pulls from 21 engineering blogs: Netflix, Meta, Uber, AWS, Google, Spotify, Stripe, Cloudflare, LinkedIn, Figma, Vercel, Datadog, and more
-- **AI-powered ranking** — Your LLM filters posts down to the 10 most relevant to your interests
+- **AI-powered ranking** — Your LLM filters posts to the most relevant for your interests (configurable 5-20 results)
 - **Smart summaries** — 4-5 sentence technical summaries so you can decide what's worth a full read
-- **Reading list** — Save posts, track reading progress (unread / reading / read)
+- **Reading list** — Save posts, track reading progress (unread / reading / read), add tags, write notes
+- **Custom blog URLs** — Add any blog post URL to your reading list with auto-extracted metadata and AI summary
+- **Full-text search** — Search across all cached blog posts from the nav bar
+- **Filter tabs** — Filter discovery results by All / New / Added status
 - **Configurable feed settings** — Choose between "most recent N posts" or "posts from last N days" per source
 - **Persistent results** — Discovery results are saved and restored on page reload (no redundant API calls)
 - **Dark / light theme** — Dark navy theme with apricot accent, plus light mode and system preference detection
@@ -88,7 +91,7 @@ You click "Collect Fancy Blogs"
   (titles + descriptions only -- fast & cheap)
         |
         v
-  Top 10 posts selected
+  Top N posts selected (configurable 5-20)
         |
         v
   Full article text extracted for each
@@ -142,9 +145,10 @@ internal/
   ai/                LLM provider interface & implementations
   api/               HTTP router, handlers, embedded SPA
 web/                 React SPA
-  src/pages/         Home, Preferences, ReadingList
+  src/pages/         Home (discovery), Preferences, ReadingList
   src/components/    BlogCard, ReadingItem, ConfirmDialog, Toast, Layout
   src/lib/           API client, types, utils, theme
+docs/                Internal brainstorm & planning docs (gitignored)
 ```
 
 ## License

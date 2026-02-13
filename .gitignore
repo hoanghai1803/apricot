@@ -22,6 +22,9 @@ internal/api/dist/
 .DS_Store
 Thumbs.db
 
+# Internal docs
+docs/brainstorm.md
+
 # IDE
 .vscode/
 .idea/
